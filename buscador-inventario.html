@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buscador de inventario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style id="css">
+:root{
+  --bg:#f2f4f5;
+  --panel:#ffffff;
+  --ink:#17242a;
+  --ink-soft:#5a6b72;
+  --line:#d8dfe2;
+  --accent:#0a7d8c;
+  --accent-ink:#ffffff;
+  --accent-soft:#e0f0f2;
+  --ok:#1a7f4b;
+  --warn:#b3541e;
+  --danger:#b02a37;
+  --hit:#fff3c4;
+  --hit-ink:#5c4a00;
+  --shadow:0 1px 3px rgba(23,36,42,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101a1e;
+    --panel:#18262c;
+    --ink:#e6edf0;
+    --ink-soft:#93a6ad;
+    --line:#2b3d45;
+    --accent:#31a8b8;
+    --accent-ink:#08161a;
+    --accent-soft:#123840;
+    --ok:#4cc783;
+    --warn:#e08a4d;
+    --danger:#e06974;
+    --hit:#4a3f10;
+    --hit-ink:#ffe484;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101a1e;
+  --panel:#18262c;
+  --ink:#e6edf0;
+  --ink-soft:#93a6ad;
+  --line:#2b3d45;
+  --accent:#31a8b8;
+  --accent-ink:#08161a;
+  --accent-soft:#123840;
+  --ok:#4cc783;
+  --warn:#e08a4d;
+  --danger:#e06974;
+  --hit:#4a3f10;
+  --hit-ink:#ffe484;
+  --shadow:0 1px 3px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Barlow",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:16px;
+  line-height:1.45;
+  min-height:100vh;
+}
+.wrap{max-width:920px;margin:0 auto;padding:20px 16px 60px}
+header.top{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-bottom:16px;
+}
+h1{font-size:1.35rem;font-weight:700;letter-spacing:-.01em}
+.datainfo{font-size:.85rem;color:var(--ink-soft)}
+.datainfo button{
+  background:none;border:none;color:var(--accent);font:inherit;
+  cursor:pointer;text-decoration:underline;padding:0;
+}
+
+/* Search */
+.searchbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0 12px}
+.searchbox{
+  display:flex;align-items:center;gap:10px;
+  background:var(--panel);border:2px solid var(--line);border-radius:10px;
+  padding:0 14px;box-shadow:var(--shadow);
+  transition:border-color .15s;
+}
+.searchbox:focus-within{border-color:var(--accent)}
+.searchbox svg{flex:none;color:var(--ink-soft)}
+.searchbox input{
+  flex:1;border:none;background:none;color:var(--ink);
+  font:inherit;font-size:1.1rem;padding:14px 0;outline:none;min-width:0;
+}
+.searchbox input::placeholder{color:var(--ink-soft)}
+.clearbtn{
+  flex:none;border:none;background:var(--line);color:var(--ink);
+  width:26px;height:26px;border-radius:50%;cursor:pointer;
+  font-size:.95rem;line-height:1;display:none;
+}
+.searchbox.hasval .clearbtn{display:block}
+.rescount{font-size:.85rem;color:var(--ink-soft);min-height:1.2em}
+.resrow{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap}
+.toggle{font-size:.85rem;color:var(--ink-soft);display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.groups{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+  gap:6px;margin:4px 0 14px;
+}
+.gchip{
+  display:flex;align-items:center;gap:10px;
+  border:1.5px solid var(--line);border-radius:8px;background:var(--panel);
+  padding:9px 12px;font:inherit;font-size:.92rem;color:var(--ink);cursor:pointer;
+  text-align:left;user-select:none;min-width:0;
+}
+.gchip .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gchip .n{font-size:.8rem;color:var(--ink-soft);flex:none}
+.gchip .box{
+  flex:none;width:18px;height:18px;border:1.5px solid var(--line);border-radius:4px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;line-height:1;
+}
+.gchip.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.gchip.on .box{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.gchip.all{grid-column:1 / -1}
+.gchip.all.on{background:var(--panel)}
+
+/* Loader panel */
+.loader{
+  background:var(--panel);border:2px dashed var(--line);border-radius:12px;
+  padding:40px 20px;text-align:center;cursor:pointer;
+  transition:border-color .15s,background .15s;
+}
+.loader.drag{border-color:var(--accent);background:var(--accent-soft)}
+.loader h2{font-size:1.05rem;font-weight:600;margin-bottom:6px}
+.loader p{color:var(--ink-soft);font-size:.9rem;margin-bottom:16px}
+.btn{
+  display:inline-block;background:var(--accent);color:var(--accent-ink);
+  border:none;border-radius:8px;padding:11px 22px;
+  font:inherit;font-weight:600;cursor:pointer;
+}
+.btn[disabled]{opacity:.6;cursor:default}
+.btn:focus-visible,.searchbox input:focus-visible,button:focus-visible,select:focus-visible{
+  outline:3px solid var(--accent);outline-offset:2px;
+}
+.btn.ghost{
+  background:none;color:var(--accent);border:1.5px solid var(--accent);
+  padding:9px 18px;font-weight:600;
+}
+input[type=file]{display:none}
+.loadmsg{margin-top:14px;font-size:.9rem;color:var(--danger);min-height:1.2em}
+
+/* Mapping panel */
+.mapping{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;box-shadow:var(--shadow);margin-top:16px;
+}
+.mapping h2{font-size:1.05rem;font-weight:600;margin-bottom:4px}
+.mapping .sub{color:var(--ink-soft);font-size:.88rem;margin-bottom:16px}
+.maprow{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.maprow label{font-weight:600;font-size:.92rem}
+.maprow select{
+  width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--ink);font:inherit;font-size:.92rem;
+}
+.pricechips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  border:1.5px solid var(--line);border-radius:20px;
+  padding:6px 14px;font-size:.9rem;cursor:pointer;user-select:none;
+  background:var(--bg);
+}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+:root[data-theme="dark"] .chip.on{color:var(--ink)}
+.mapping .actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pubmsg{font-size:.9rem;color:var(--ink-soft);width:100%;min-height:1.2em}
+.pubmsg.err{color:var(--danger)}
+
+/* Results */
+.results{margin-top:4px}
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);
+}
+.card .code{
+  font-family:"Barlow Semi Condensed","Barlow",sans-serif;
+  font-weight:600;font-size:1rem;color:var(--accent);
+  word-break:break-all;
+}
+.card .desc{margin:4px 0 10px;font-size:.98rem}
+.card .meta{
+  display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline;
+  border-top:1px solid var(--line);padding-top:10px;
+}
+.metaitem .k{font-size:.75rem;color:var(--ink-soft);display:block}
+.metaitem .v{font-family:"Barlow Semi Condensed","Barlow",sans-serif;font-weight:600;font-size:1.05rem}
+.card.multi{border-left:4px solid var(--accent)}
+.gsummary{font-size:.85rem;color:var(--ink-soft);margin:-4px 0 8px}
+.gsummary span{font-weight:600}
+.avgbox{
+  display:flex;flex-wrap:wrap;gap:6px 22px;align-items:baseline;
+  background:var(--accent-soft);border-radius:8px;padding:10px 14px;margin-bottom:10px;
+}
+.avglabel{font-size:.85rem;font-weight:600;color:var(--accent);width:100%}
+:root[data-theme="dark"] .avglabel{color:var(--ink)}
+.variants{border-top:1px solid var(--line)}
+.variant{
+  display:grid;grid-template-columns:minmax(110px,1fr) 2fr;gap:6px 16px;
+  align-items:center;padding:10px 0;border-bottom:1px solid var(--line);
+}
+.variant:last-child{border-bottom:none;padding-bottom:0}
+.variant .meta{border-top:none;padding-top:0}
+.vbrand{font-weight:600;font-size:.98rem}
+.vdesc{font-weight:400;font-size:.85rem;color:var(--ink-soft);margin-top:2px}
+@media(max-width:480px){
+  .variant{grid-template-columns:1fr}
+}
+.stock-ok{color:var(--ok)}
+.stock-low{color:var(--warn)}
+.stock-out{color:var(--danger)}
+mark{background:var(--hit);color:var(--hit-ink);border-radius:3px;padding:0 1px}
+.more{
+  width:100%;background:none;border:1.5px dashed var(--line);border-radius:10px;
+  color:var(--ink-soft);font:inherit;padding:12px;cursor:pointer;margin-top:4px;
+}
+.empty{
+  text-align:center;color:var(--ink-soft);padding:50px 20px;font-size:.95rem;
+}
+.notice{
+  background:var(--accent-soft);border-radius:10px;padding:14px 16px;margin:10px 0 16px;
+  font-size:.92rem;line-height:1.5;
+}
+.notice .btn{margin-top:10px}
+.hidden{display:none !important}
+@media(min-width:560px){
+  .maprow{grid-template-columns:160px 1fr}
+}
+</style>
+</head>
+<body>
+<template id="body-src">
+<div class="wrap">
+
+  <header class="top">
+    <h1>Buscador de inventario</h1>
+    <div class="datainfo" id="dataInfo"></div>
+  </header>
+
+  <!-- Paso 1: cargar archivo (solo el dueño) -->
+  <div class="loader hidden" id="loader" role="button" tabindex="0" aria-label="Cargar archivo de inventario">
+    <h2>Carga tu hoja de Excel</h2>
+    <p>Arrastra el archivo aquí o tócalo para elegirlo (.xlsx, .xls o .csv).<br>Al confirmar se genera la página actualizada con el inventario adentro.</p>
+    <span class="btn">Elegir archivo</span>
+    <div class="loadmsg" id="loadMsg"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
+
+  <!-- Paso 2: mapear columnas -->
+  <div class="mapping hidden" id="mapping">
+    <h2>Confirma las columnas</h2>
+    <p class="sub">Detecté estas columnas en tu archivo. Ajusta si alguna no coincide.</p>
+    <div class="maprow" id="sheetRow" style="display:none">
+      <label for="selSheet">Hoja</label>
+      <select id="selSheet"></select>
+    </div>
+    <div class="maprow">
+      <label for="selHeader">Fila de títulos</label>
+      <select id="selHeader"></select>
+    </div>
+    <div class="maprow">
+      <label for="selCode">Código</label>
+      <select id="selCode"></select>
+    </div>
+    <div class="maprow">
+      <label for="selDesc">Descripción</label>
+      <select id="selDesc"></select>
+    </div>
+    <div class="maprow">
+      <label for="selBrand">Marca</label>
+      <select id="selBrand"></select>
+    </div>
+    <div class="maprow">
+      <label for="selGroup">Grupo</label>
+      <select id="selGroup"></select>
+    </div>
+    <div class="maprow">
+      <label for="selStock">Existencia</label>
+      <select id="selStock"></select>
+    </div>
+    <div class="maprow" style="align-items:start">
+      <label style="padding-top:8px">Precios</label>
+      <div class="pricechips" id="priceChips"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnConfirm">Generar página actualizada</button>
+      <button class="btn ghost" id="btnCancelMap">Cargar otro archivo</button>
+      <div class="pubmsg" id="pubMsg"></div>
+    </div>
+  </div>
+
+  <!-- Paso 3: buscar -->
+  <div class="hidden" id="searchArea">
+    <div class="searchbar">
+      <div class="searchbox" id="searchBox">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+        <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="Código, marca, grupo o palabras de la descripción…" aria-label="Buscar en el inventario">
+        <button class="clearbtn" id="btnClear" aria-label="Borrar búsqueda">✕</button>
+      </div>
+      <div class="resrow">
+        <div class="rescount" id="resCount"></div>
+        <label class="toggle"><input type="checkbox" id="chkOut"> Mostrar agotados</label>
+      </div>
+    </div>
+    <div class="groups hidden" id="groups" role="group" aria-label="Filtrar por grupo"></div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="notice hidden" id="dlNotice"></div>
+  <div class="empty hidden" id="noData">El inventario todavía no ha sido cargado.</div>
+
+</div>
+</template>
+<script id="inv-data" type="application/json">{"labels":["PRECIO MERCADOLIBRE","PRECIO MOSTRADOR USD"],"hasStock":true,"hasGroup":true,"fileName":"Control de Ventas 2026 SEPTIEMBRE 2026 (SOLO INVENTARIO).xlsx","loadedAt":"2026-09-17T20:36:01.087Z","items":[["BOS-900","POLVO FUNDENTE GLOBAL AIR","GLOBAL AIR",0,[null,0],"FUNDENTE"],["CMC-714","COMP.DODGE CALIBER 07-12","",0,[378.97,217.27613333333335],"COMPRESOR"],["CMF-122","","HAVILAND",1,[279.7,160.36133333333333],"COMPRESOR"],["CMF-127","COMPRESOR FORD FIESTA POWER","PLUS AC PARTS",1,[319.7,183.29466666666667],"COMPRESOR"],["CMG-200","PISTONERA V5","PLUS AC PARTS",1,[127.7,73.21466666666667],"COMPRESOR"],["CMG-204","COMP.GM LUV D-MAX GASOLINA 06-14","PLUS AC PARTS",0,[329.7,189.028],"COMPRESOR"],["CMG-204","COMP.GM LUV D-MAX GASOLINA 06-14","PLUS AC PARTS",0,[329.7,189.028],"COMPRESOR"],["CMG-204","COMP.GM LUV D-MAX GASOLINA 06-14","RACA AIR",2,[357.7,205.08133333333333],"COMPRESOR"],["CMG-204","COMP.GM LUV D-MAX GASOLINA 06-14","GLOBAL AC WIND",2,[357.7,205.08133333333333],"COMPRESOR"],["CMG-212","COMPRESOR CHEVROLET CAVALIER 95-02","GLOBAL AIR",3,[364.7,209.09466666666665],"COMPRESOR"],["CMG-213","COMP.GM G.VITARA XL5/STEEM/JIMMY","PLUS AC PARTS",0,[249.7,143.16133333333335],"COMPRESOR"],["CMG-213","COMP.GM G.VITARA XL5/STEEM/JIMMY","PLUS AC PARTS",2,[249.7,143.16133333333335],"COMPRESOR"],["CMG-213","COMP.GM G.VITARA XL5/STEEM/JIMMY","PLUS AC PARTS",4,[249.7,143.16133333333335],"COMPRESOR"],["CMG-251","COMP.GM AVEO 04-13","PLUS AC PARTS",0,[319.7,183.29466666666667],"COMPRESOR"],["CMG-251","COMP.GM AVEO 04-13","RACA AIR",1,[322.7,185.01466666666667],"COMPRESOR"],["CMG-254","COMPRESOR GM OPTRA","RACA AIR",1,[354.7,203.36133333333333],"COMPRESOR"],["CMG-257","COMP.GM SPARK IMP.","RACA AIR",1,[302.7,173.54799999999997],"COMPRESOR"],["CMG-257","COMP.GM SPARK IMP.","PLUS AC PARTS",2,[null,0],"COMPRESOR"],["CMJ-406","COMP.JEEP GRAND CHEROKEE 4G 12-18","PLUS AC PARTS",0,[350.7,201.06799999999998],"COMPRESOR"],["CMJ-406","COMP.JEEP GRAND CHEROKEE 4G 12-18","PLUS AC PARTS",1,[374.7,214.82799999999997],"COMPRESOR"],["CMM-102","COMP.MAZDA 3 1.6","",0,[300.7,172.40133333333333],"COMPRESOR"],["CMM-102","COMP.MAZDA 3 1.6","GLOBAL AC WIND",0,[379.7,217.69466666666665],"COMPRESOR"],["CMM-102","COMP.MAZDA 3 1.6","PLUS AC PARTS",1,[369.7,211.96133333333333],"COMPRESOR"],["CMM-103","COMP.MAZDA 3 2.0","GLOBAL AC WIND",0,[314.7,180.42799999999997],"COMPRESOR"],["CMM-103","COMP.MAZDA 3 2.0","GLOBAL AC WIND",0,[319.7,183.29466666666667],"COMPRESOR"],["CMM-406","COMP.HYUNDAI TUCSON 10PA15","PLUS AC PARTS",0,[332.7,190.748],"COMPRESOR"],["CMM-406","COMP.HYUNDAI TUCSON 10PA15","RACA AIR",2,[334.7,191.89466666666667],"COMPRESOR"],["CMM-425","COMP.MITSUBISHI LANCER 03-06","PLUS AC PARTS",1,[339.7,194.76133333333334],"COMPRESOR"],["CMR-501","COMPRESOR RENAULT LOGAN 06-09","GLOBAL AC WIND",0,[449.7,257.82800000000003],"COMPRESOR"],["CMR-511","COMPRERSOR RENAUT KANGOO CLIO","",0,[null,0],"COMPRESOR"],["CMT-302","COMP.TOYOTA YARIS 01-05","RACA AIR",0,[293.7,168.38799999999998],"COMPRESOR"],["CMT-302","COMP.TOYOTA YARIS 01-05","PLUS AC PARTS",0,[288.7,165.52133333333333],"COMPRESOR"],["CMT-307","COMP.TOYOTA TERIOS 02-07","RACA AIR",5,[304.7,174.69466666666665],"COMPRESOR"],["CMT-319","COMP.TOYOTA 4RUNNER 03-09","PLUS AC PARTS",1,[332.7,190.748],"COMPRESOR"],["CMT-320","COMP. TOYOTA YARIS 06-12","",0,[349,200.09333333333333],"COMPRESOR"],["CMT-320","COMP. TOYOTA YARIS 06-12","RACA AIR",5,[404.7,232.02800000000002],"COMPRESOR"],["CMT-325","COMP.TOTOYA CAMRY 10S17 02-06","",1,[329.7,189.028],"COMPRESOR"],["CMT-339","COMPRESOR TOYOTA COROLLA IRANI 14-16","GLOBAL AIR",1,[479.7,275.028],"COMPRESOR"],["CMV-806","COMP.VW FOX 05/10","PLUS AC PARTS",0,[332.7,190.748],"COMPRESOR"],["CMV-806","COMP.VW FOX 05/10","GLOBAL AC WIND",1,[439.7,252.09466666666665],"COMPRESOR"],["CMY-801","COMP.CHERY ARAUCA 12-16","",0,[299.7,171.82799999999997],"COMPRESOR"],["CMY-801","COMP.CHERY ARAUCA 12-16","RACA AIR",3,[329.7,189.028],"COMPRESOR"],["COC-702","COND.DODGE NEON 97-99","",0,[79.7,45.69466666666666],"CONDENSADOR"],["COC-713","COND.DODGE NEON 01-03","GLOBAL AC WIND",0,[102.7,58.88133333333334],"CONDENSADOR"],["COC-713","CONDENSADOR DODGGE NEON 01-03","GLOBAL AIR",0,[102.7,58.88133333333334],"CONDENSADOR"],["COC-713","CONDENSADOR DODGGE NEON 01-03","SASHACOOLCARS",1,[124.7,71.49466666666667],"CONDENSADOR"],["COC-713","CONDENSADOR DODGGE NEON 01-03","NEVADA",5,[124.7,71.49466666666667],"CONDENSADOR"],["COF-105","CONDENSADOR FORD FIESTA BALITA 97-03","GLOBAL AIR",7,[144.7,82.96133333333331],"CONDENSADOR"],["COF-108","","",0,[71.7,41.108000000000004],"CONDENSADOR"],["COF-110","COND.FORD FIESTA 01-03","",0,[null,0],"CONDENSADOR"],["COF-113","COND.FORD TRITON F-350 99-10 F/P RORAIMA","RORAIMA",0,[114.7,65.76133333333334],"CONDENSADOR"],["COF-116","COND.FORD LASER 01-03","",0,[117.7,67.48133333333334],"CONDENSADOR"],["COF-116","COND.FORD LASER 01-03","NEVADA",0,[117.7,67.48133333333334],"CONDENSADOR"],["COF-116","COND.FORD LASER 01-03","GLOBAL AC WIND",3,[114.7,65.76133333333334],"CONDENSADOR"],["COF-117","COND.FORD F-150 FORTALEZA 98-07","RACA AIR",3,[134.7,77.228],"CONDENSADOR"],["COF-117","COND.FORD F-150 FORTALEZA 98-07","GLOBAL AC WIND",5,[134.7,77.228],"CONDENSADOR"],["COF-120","COND.FORD RANGER 10-12","GLOBAL AC WIND",0,[138.7,79.52133333333332],"CONDENSADOR"],["COF-120","COND.FORD RANGER 10-12","SASHACOOLCARS",1,[134.7,77.228],"CONDENSADOR"],["COF-124","COND.FORD TRITON F-350 99-10 F/P","RACA AIR",2,[140.7,80.66799999999999],"CONDENSADOR"],["COF-126","COND.FORD FOCUS 01-06","ROY",0,[96.7,55.44133333333333],"CONDENSADOR"],["COF-126","COND.FORD FOCUS 01-06","GLOBAL AC WIND",4,[100.7,57.73466666666667],"CONDENSADOR"],["COF-126","COND.FORD FOCUS 01-06","GLOBAL AIR",4,[100.7,57.73466666666667],"CONDENSADOR"],["COF-129","COND.FORD KA 05-07","",0,[84.7,48.56133333333334],"CONDENSADOR"],["COF-129","COND.FORD KA 05-07","RACA AIR",10,[90.7,52.001333333333335],"CONDENSADOR"],["COF-130","COND.FORD F-150 FORTALEZA 98-07 RORAIMA","",0,[136.7,78.37466666666666],"CONDENSADOR"],["COF-133","COND.FORD FIESTA POWER / ECO-SPORT 04-12","ATC",0,[89.7,51.428000000000004],"CONDENSADOR"],["COF-133","COND.FORD FIESTA POWER / ECO-SPORT 04-12","GLOBAL AC WIND",0,[105.7,60.601333333333336],"CONDENSADOR"],["COF-133","COND.FORD FIESTA POWER / ECO-SPORT 04-12","GLOBAL AC WIND",0,[105.7,60.601333333333336],"CONDENSADOR"],["COF-133","COND.FORD FIESTA POWER / ECO-SPORT 04-12","GLOBAL AIR",6,[105.7,60.601333333333336],"CONDENSADOR"],["COF-133","COND.FORD FIESTA POWER / ECO-SPORT 04-12","UNICOOL",5,[98.7,56.587999999999994],"CONDENSADOR"],["COF-136","COND.FORD FUSION 07-08","RACA AIR",2,[140.7,80.66799999999999],"CONDENSADOR"],["COF-140","CONDENSADOR FORD ESCAPE HEMBRA","GLOBAL AIR",1,[123.7,70.92133333333334],"CONDENSADOR"],["COF-144","COND. FORD FIESTA TITANIUM 12-20","GLOBAL AIR",1,[139.7,80.09466666666665],"CONDENSADOR"],["COF-145","CONDENSADOR FORD EXPLORER EDDIE BAUER 06-11","GLOBAL AC WIND",0,[124.7,71.49466666666667],"CONDENSADOR"],["COF-145","CONDENSADOR FORD EXPLORER EDDIE BAUER 06-11","UNICOOL",2,[131.7,75.508],"CONDENSADOR"],["COG-201","COND.GM OPTRA 05-12 CON FILTRO RORAIMA","",0,[85.7,49.13466666666667],"CONDENSADOR"],["COG-202","COND.GM OPTRA 05-12 CON FILTRO","ATC",1,[111.7,64.04133333333333],"CONDENSADOR"],["COG-204","COND.GM BLAZER 95-00","GLOBAL AC WIND",0,[114.7,65.76133333333334],"CONDENSADOR"],["COG-204","COND.GM BLAZER 95-00","RACA AIR",2,[119.7,68.628],"CONDENSADOR"],["COG-206","COND.GM CRUZE 12-14","RACA AIR",0,[115.7,66.33466666666668],"CONDENSADOR"],["COG-206","COND.GM CRUZE 12-14","RACA AIR",2,[114.7,65.76133333333334],"CONDENSADOR"],["COG-210","COND.GM CAPTIVA 07-08","",0,[92.7,53.148],"CONDENSADOR"],["COG-210","COND.GM CAPTIVA 07-08","GLOBAL AC WIND",0,[109.7,62.89466666666667],"CONDENSADOR"],["COG-210","COND.GM CAPTIVA 07-08","GLOBAL AC WIND",2,[111.7,64.04133333333333],"CONDENSADOR"],["COG-210","CONDENSADOR CHEVROLET CAPTIVA 07-08","GLOBAL AIR",0,[109.7,62.89466666666667],"CONDENSADOR"],["COG-212","COND.GM VAN EXPRESS 06-08","RACA",2,[134.7,77.228],"CONDENSADOR"],["COG-220","COND.GM CAVALIER 95-00","ROY",0,[94.7,54.294666666666664],"CONDENSADOR"],["COG-220","COND.GM CAVALIER 95-00","GLOBAL AIR",0,[95.7,54.868],"CONDENSADOR"],["COG-220","COND.GM CAVALIER 95-00","GLOBAL AC WIND",0,[107.7,61.748],"CONDENSADOR"],["COG-220","COND.GM CAVALIER 95-00","GLOBAL AC WIND",9,[115.7,66.33466666666668],"CONDENSADOR"],["COG-220","COND.GM CAVALIER 95-00","GLOBAL AC WIND",20,[115.7,66.33466666666668],"CONDENSADOR"],["COG-229","COND.GM CHEVY C2/CORSA 07-08 CON FILTRO","GLOBAL AIR",0,[174.7,100.16133333333332],"CONDENSADOR"],["COG-232","","GLOBAL AC WIND",1,[114.7,65.76133333333334],"CONDENSADOR"],["COG-233","COND.GM MONTANA 08/CORSA 12","",0,[85.7,49.13466666666667],"CONDENSADOR"],["COG-234","COND.GM CORSA 01-03","GLOBAL AC WIND",0,[114.7,65.76133333333334],"CONDENSADOR"],["COG-234","CONDENSADOR CHEVROLET CORSA 01-03","GLOBAL AIR",0,[116.7,66.908],"CONDENSADOR"],["COG-234","CONDENSADOR CHEVROLET CORSA 01-03","GLOBAL AC WIND",1,[129.7,74.36133333333332],"CONDENSADOR"],["COG-234","CONDENSADOR CHEVROLET CORSA 01-03","GLOBAL AC WIND",4,[129.7,74.36133333333332],"CONDENSADOR"],["COG-236","COND.GM CORSA 96-99","UNICOOL",1,[102.7,58.88133333333334],"CONDENSADOR"],["COG-238","CONDENSADOR DAEWOO CIELO","GLOBAL AC WIND",2,[113.7,65.188],"CONDENSADOR"],["COG-239","COND.DAEWOO NUBIRA 00-04","ROY",0,[86.7,49.708000000000006],"CONDENSADOR"],["COG-239","COND.DAEWOO NUBIRA 00-04","GLOBAL AC WIND",3,[88.7,50.85466666666667],"CONDENSADOR"],["COG-240","COND.DAEWOO MATIZ 98-00","ROY",1,[88.7,50.85466666666667],"CONDENSADOR"],["COG-240","COND.DAEWOO MATIZ 98-00","UNICOOL",3,[88.7,50.85466666666667],"CONDENSADOR"],["COG-241","COND.DAEWOO LANOS 98-00","UNICOOL",0,[98.7,56.587999999999994],"CONDENSADOR"],["COG-241","COND.DAEWOO LANOS 98-00","GLOBAL AC WIND",0,[100.7,57.73466666666667],"CONDENSADOR"],["COG-241","COND.DAEWOO LANOS 98-00","GLOBAL AIR",3,[101.7,58.308],"CONDENSADOR"],["COG-243","CONDENSADOR CHEVROLET EPICA","NEVADA",5,[154.7,88.69466666666666],"CONDENSADOR"],["COG-244","COND.GM MERIVA 07-08","UNICOOL",0,[86.7,49.708000000000006],"CONDENSADOR"],["COG-244","COND.GM MERIVA 07-08","UNICOOL",2,[124.7,71.49466666666667],"CONDENSADOR"],["COG-245","COND. GM TRAILBAZER 4.2 6CIL","GLOBAL AC WIND",0,[125.7,72.068],"CONDENSADOR"],["COG-245","COND. GM TRAILBAZER 4.2 6CIL","GLOBAL AC WIND",0,[125.7,72.068],"CONDENSADOR"],["COG-248","COND.GM LUV D-MAX 07-09 GASOLINA","SASHACOOLCARS",2,[129.7,74.36133333333332],"CONDENSADOR"],["COG-248","COND.GM LUV D-MAX 07-09 GASOLINA","GLOBAL AC WIND",2,[130.7,74.93466666666666],"CONDENSADOR"],["COG-250","COND.GM AVEO 04-10 CON FILTRO","GLOBAL AIR",0,[95.7,54.868],"CONDENSADOR"],["COG-250","COND.GM AVEO 04-10 CON FILTRO","ATC",0,[93.7,53.721333333333334],"CONDENSADOR"],["COG-250","COND.GM AVEO 04-10 CON FILTRO","GLOBAL AIR",0,[93.7,53.721333333333334],"CONDENSADOR"],["COG-250","CONDENSADOR CHEVROLET AVEO 04-12","GLOBAL AIR",7,[95.7,54.868],"CONDENSADOR"],["COG-250","CONDENSADOR CHEVROLET AVEO 04-12","GLOBAL AC WIND",0,[95.7,54.868],"CONDENSADOR"],["COG-250","CONDENSADOR CHEVROLET AVEO 04-12","GLOBAL AIR",10,[95.7,54.868],"CONDENSADOR"],["COG-251","COND.GM LUV D-MAX 07 DIESEL","ROY",3,[87.7,50.281333333333336],"CONDENSADOR"],["COG-252","COND.GM Z-71 00-02/TAHOE DOS EVAP/HUMMER","",0,[130.7,74.93466666666666],"CONDENSADOR"],["COG-252","COND.GM Z-71 00-02/TAHOE DOS EVAP/HUMMER","UNICOOL",2,[149.7,85.828],"CONDENSADOR"],["COG-253","COND.GM ASTRA 99 C/F","GLOBAL AIR",0,[100.7,57.73466666666667],"CONDENSADOR"],["COG-253","COND.GM ASTRA 99 C/F","GLOBAL AIR",0,[100.7,57.73466666666667],"CONDENSADOR"],["COG-253","CONDENSADOR CHEVROLET ASTRA 99 CON FILTRO","GLOBAL AIR",6,[128.7,73.788],"CONDENSADOR"],["COG-253","CONDENSADOR CHEVROLET ASTRA 99 CON FILTRO","GLOBAL AIR",4,[128.7,73.788],"CONDENSADOR"],["COG-254","COND.GM GRAND VITARA XL7 03-07","GLOBAL AC WIND",2,[129.7,74.36133333333332],"CONDENSADOR"],["COG-261","CONDENSADOR GM TRAILBLAZER 8 V","GLOBAL AC WIND",8,[148.7,85.25466666666667],"CONDENSADOR"],["COG-266","COND.GM SPARK 07-11","RACA AIR",0,[129.7,74.36133333333332],"CONDENSADOR"],["COG-266","COND.GM SPARK 07-11","GLOBAL AC WIND",0,[129.7,74.36133333333332],"CONDENSADOR"],["COG-266","COND.GM SPARK 07-11","NEVADA",1,[126.7,72.64133333333334],"CONDENSADOR"],["COG-266","COND.GM SPARK 07-11","HAVILAND",10,[126.7,72.64133333333334],"CONDENSADOR"],["COH-603","COND.HONDA CIVIC 96-00","ROY",0,[92.7,53.148],"CONDENSADOR"],["COH-603","COND.HONDA CIVIC 96-00","GLOBAL AC WIND",0,[89.7,51.428000000000004],"CONDENSADOR"],["COH-603","CONDENSADOR HONDA CIVIC 95-00","GLOBAL AIR",3,[91.7,52.574666666666666],"CONDENSADOR"],["COH-603","CONDENSADOR HONDA CIVIC 95-00","GLOBAL AIR",1,[91.7,52.574666666666666],"CONDENSADOR"],["COH-612","COND.HONDA FIT 05-06","ROY",3,[82.7,47.41466666666667],"CONDENSADOR"],["COI-601","COND.FIAT PALIO 06-08","GLOBAL AC WIND",0,[124.7,71.49466666666667],"CONDENSADOR"],["COI-601","COND.FIAT PALIO 06-08","NEVADA",2,[126.7,72.64133333333334],"CONDENSADOR"],["COI-602","COND.FIAT UNO FIRE 06-08","UNICOOL",2,[109.7,62.89466666666667],"CONDENSADOR"],["COI-604","COND.FIAT PALIO 98-04","ROY",4,[68.7,39.388000000000005],"CONDENSADOR"],["COJ-402","COND.JEEP GRAND CHEROKEE 06-11","ATC",1,[128.7,73.788],"CONDENSADOR"],["COJ-402","COND.JEEP GRAND CHEROKEE 06-11","RACA AIR",1,[132.7,76.08133333333332],"CONDENSADOR"],["COJ-402","COND.JEEP GRAND CHEROKEE 06-11","GLOBAL AC WIND",0,[128.7,73.788],"CONDENSADOR"],["COJ-402","COND.JEEP GRAND CHEROKEE 06-11","GLOBAL AC WIND",5,[128.7,73.788],"CONDENSADOR"],["COJ-405","COND.JEEP COMANCHE/CHEROKEE 95 ROSCA","ROY",1,[116.7,66.908],"CONDENSADOR"],["COJ-406","COND.JEEP CHEROKEE 96-01","r",2,[107.7,61.748],"CONDENSADOR"],["COJ-406","CONDENSADOR JEEP CHEROKEE 96-01","GLOBAL AIR",4,[107.7,61.748],"CONDENSADOR"],["COK-101","COND.KIA RIO CVVT 07-09","",0,[92.7,53.148],"CONDENSADOR"],["COK-106","COND.KIA PICANTO 07-10","ROY",0,[94.7,54.294666666666664],"CONDENSADOR"],["COK-106","COND.KIA PICANTO 07-10","GLOBAL AIR",2,[110.7,63.467999999999996],"CONDENSADOR"],["COK-106","COND.KIA PICANTO 07-10","GLOBAL AIR",3,[110.7,63.467999999999996],"CONDENSADOR"],["COK-107","COND.KIA RIO STYLUS 07","RACA AIR",1,[126.7,72.64133333333334],"CONDENSADOR"],["COK-107","COND.KIA RIO STYLUS 07","GLOBAL AC WIND",3,[126.7,72.64133333333334],"CONDENSADOR"],["COK-108","COND.KIA OPTIMA/SONATA 06-09","GLOBAL AIR",0,[126.7,72.64133333333334],"CONDENSADOR"],["COK-108","COND.KIA OPTIMA/SONATA 06-09","GLOBAL AIR",2,[145.7,83.53466666666665],"CONDENSADOR"],["COK-111","COND.KIA OPTIMA/SONATA 03-04","ROY",0,[92.7,53.148],"CONDENSADOR"],["COM-104","COND.MAZDA 3 04-08","ROY",3,[97.7,56.01466666666667],"CONDENSADOR"],["COM-104","COND.MAZDA 3 04-08","GLOBAL AC WIND",5,[97.7,56.01466666666667],"CONDENSADOR"],["COM-106","COND.MAZDA 6 04-08","GLOBAL AIR",0,[117.7,67.48133333333334],"CONDENSADOR"],["COM-106","COND.MAZDA 6 04-08","GLOBAL AC WIND",1,[119.7,68.628],"CONDENSADOR"],["COM-106","CONDENSADOR MAZDA 6 04-08","GLOBAL AIR",2,[119.7,68.628],"CONDENSADOR"],["COM-108","CONDENSADOR MAZDA DEMIO","GLOBAL AC WIND",0,[99.7,57.16133333333333],"CONDENSADOR"],["COM-402","CONDENSADOR HYUNDAI TUCSON 16-18","GLOBAL AIR",1,[111.7,64.04133333333333],"CONDENSADOR"],["COM-407","CONDENSADOR HYUNDAI H1","GLOBAL AIR",0,[131.7,75.508],"CONDENSADOR"],["COM-407","CONDENSADOR HYUNDAI H1","HAVILAND",1,[134.7,77.228],"CONDENSADOR"],["COM-408","COND.HYUNDAI ACCENT 99-04","GLOBAL AC WIND",0,[117.7,67.48133333333334],"CONDENSADOR"],["COM-408","COND.HYUNDAI ACCENT 99-04","RACA AIR",14,[119.7,68.628],"CONDENSADOR"],["COM-408","COND.HYUNDAI ACCENT 99-04","GLOBAL AC WIND",5,[119.7,68.628],"CONDENSADOR"],["COM-409","COND.MITSUBISHI LANCER 98-01","",0,[119.7,68.628],"CONDENSADOR"],["COM-409","COND.MITSUBISHI LANCER 98-01","ECA",0,[133.7,76.65466666666666],"CONDENSADOR"],["COM-409","COND.MITSUBISHI LANCER 98-01","GLOBAL AC WIND",2,[133.7,76.65466666666666],"CONDENSADOR"],["COM-410","COND.HYUNDAI ACCENT 08-11","",0,[84.7,48.56133333333334],"CONDENSADOR"],["COM-411","COND. MITSUBISHI SIGNO","",0,[103.7,59.45466666666667],"CONDENSADOR"],["COM-411","COND. MITSUBISHI SIGNO","GLOBAL AC WIND",0,[116.7,66.908],"CONDENSADOR"],["COM-412","COND.HYUNDAI ELANTRA 07-10","ROY",1,[84.7,48.56133333333334],"CONDENSADOR"],["COM-415","COND.MITSUBISHI GALANT MX/MF 96-06","",0,[92.7,53.148],"CONDENSADOR"],["COM-433","CONDENSADOR HYUNDAI SANTA FE 07-09","GLOBAL AIR",1,[127.7,73.21466666666667],"CONDENSADOR"],["COM-435","COND HYUNDAI GETZ","RACA AIR",4,[110.7,63.467999999999996],"CONDENSADOR"],["COM-604","COND.MERCEDES BENZ C180/C200/C380 10-15","",0,[99.7,57.16133333333333],"CONDENSADOR"],["CON-602","COND.NISSAN SENTRA 98-99","GLOBAL AC WIND",2,[123.7,70.92133333333334],"CONDENSADOR"],["CON-602","COND.NISSAN SENTRA 98-99","GLOBAL AIR",3,[121.7,69.77466666666668],"CONDENSADOR"],["CON-604","COND.NISSAN TIIDA 06","RACA AIR",1,[116.7,66.908],"CONDENSADOR"],["CON-604","COND.NISSAN TIIDA 06","GLOBAL AC WIND",4,[116.7,66.908],"CONDENSADOR"],["CON-614","COND.NISSAN ALTIMA 06/350 ZX 16","ROY",0,[104.7,60.028],"CONDENSADOR"],["CON-615","CONDENSADOR NISSAN MURANO 05-07","GLOBAL AIR",1,[101.7,58.308],"CONDENSADOR"],["COP-501","COND.PEUGEOT 206","GLOBAL AC WIND",2,[105.7,60.601333333333336],"CONDENSADOR"],["COR-502","CONDENSADOR RENAULT TWINGO 97-02","GLOBAL AIR",0,[126.7,72.64133333333334],"CONDENSADOR"],["COR-505","COND. RENAULT MEGANE 00-06","GLOBAL AC WIND",0,[97.7,56.01466666666667],"CONDENSADOR"],["COR-505","COND. RENAULT MEGANE 00-06","GLOBAL AC WIND",0,[102.7,58.88133333333334],"CONDENSADOR"],["COR-505","COND. RENAULT MEGANE 00-06","GLOBAL AC WIND",1,[115.7,66.33466666666668],"CONDENSADOR"],["COR-505","COND. RENAULT MEGANE 00-06","HAVILAND",3,[115.7,66.33466666666668],"CONDENSADOR"],["COR-505","COND. RENAULT MEGANE 00-06","HAVILAND",1,[115.7,66.33466666666668],"CONDENSADOR"],["COS-970","CONDENSADOR UNIVERSAL 14X24X20","GLOBAL AC WIND",1,[96.7,55.44133333333333],"CONDENSADOR"],["COS-973","CONDENSADOR UNIVERSAL 16X26X20","GLOBAL AC WIND",2,[99.7,57.16133333333333],"CONDENSADOR"],["COS-973","CONDENSADOR UNIVERSAL 16X26X20","GLOBAL AC WIND",2,[99.7,57.16133333333333],"CONDENSADOR"],["COT-306","COND.TOYOTA 4RUNNER 03-09","ROY",4,[129.7,74.36133333333332],"CONDENSADOR"],["COT-318","COND.TOYOTA COROLLA 94-97","GLOBAL AIR",0,[97.7,56.01466666666667],"CONDENSADOR"],["COT-318","COND.TOYOTA COROLLA 94-97","GLOBAL AC WIND",0,[108.7,62.321333333333335],"CONDENSADOR"],["COT-318","COND.TOYOTA COROLLA 94-97","GLOBAL AC WIND",0,[109.7,62.89466666666667],"CONDENSADOR"],["COT-318","COND.TOYOTA COROLLA 94-97","GLOBAL AC WIND",0,[109.7,62.89466666666667],"CONDENSADOR"],["COT-318","COND.TOYOTA COROLLA 94-97","GLOBAL AC WIND",0,[109.7,62.89466666666667],"CONDENSADOR"],["COT-322","COND. TOYOTA COROLLA 09-14 ORIGIN","GLOBAL AC WIND",0,[113.7,65.188],"CONDENSADOR"],["COT-324","COND.TOYOTA CAMRY 06-16/TACOMA 10-11","ROY",1,[111.7,64.04133333333333],"CONDENSADOR"],["COT-324","COND.TOYOTA CAMRY 06-16/TACOMA 10-11","RACA AIR",1,[111.7,64.04133333333333],"CONDENSADOR"],["COT-327","COND. TOYOTA TERIOS BEGOO 08-12","RACA AIR",2,[116.7,66.908],"CONDENSADOR"],["COT-327","COND. TOYOTA TERIOS BEGOO 08-12","GLOBAL AC WIND",4,[116.7,66.908],"CONDENSADOR"],["COT-341","COND.TOYOTA COROLLA NEW SENSATION 03-08","ATC",1,[105.7,60.601333333333336],"CONDENSADOR"],["COT-341","COND.TOYOTA COROLLA NEW SENSATION 03-08","GLOBAL AC WIND",0,[105.7,60.601333333333336],"CONDENSADOR"],["COT-341","COND.TOYOTA COROLLA NEW SENSATION 03-09","GLOBAL AIR",0,[105.7,60.601333333333336],"CONDENSADOR"],["COT-341","COND.TOYOTA COROLLA NEW SENSATION 03-09","GLOBAL AC WIND",4,[105.7,60.601333333333336],"CONDENSADOR"],["COT-342","COND.TOYOTA HILUX 2.7 06-11","ROY",0,[94.7,54.294666666666664],"CONDENSADOR"],["COT-342","COND.TOYOTA HILUX 2.7 06-11","GLOBAL AC WIND",4,[131.7,75.508],"CONDENSADOR"],["COT-343","COND.TOYOTA HILUX 03-05","",0,[109.7,62.89466666666667],"CONDENSADOR"],["COT-343","COND.TOYOTA HILUX 03-05","GLOBAL AC WIND",2,[127.7,73.21466666666667],"CONDENSADOR"],["COT-343","COND.TOYOTA HILUX 03-05","ROY",3,[127.7,73.21466666666667],"CONDENSADOR"],["COT-343","COND.TOYOTA HILUX 03-05","HAVILAND",12,[127.7,73.21466666666667],"CONDENSADOR"],["COT-344","COND.TOYOTA PRADO/MERU 06-10","RACA AIR",2,[127.7,73.21466666666667],"CONDENSADOR"],["COT-345","COND. TOYOTA TERIOS 02-07","RACA AIR",4,[122.7,70.348],"CONDENSADOR"],["COT-347","COND.TOYOTA YARIS 06-09","",0,[107.7,61.748],"CONDENSADOR"],["COT-347","COND.TOYOTA YARIS 06-09","GLOBAL AIR",5,[111.7,64.04133333333333],"CONDENSADOR"],["COT-347","COND.TOYOTA YARIS 06-09","GLOBAL AIR",10,[111.7,64.04133333333333],"CONDENSADOR"],["COT-348","COND.TOYOTA FORTUNER/HILUX 07-10","",1,[127.7,73.21466666666667],"CONDENSADOR"],["COT-348","COND.TOYOTA FORTUNER/HILUX 07-10","RACA AIR",1,[127.7,73.21466666666667],"CONDENSADOR"],["COT-353","COND.TOYOTA YARIS 06-09 RORAIMA","",0,[67.7,38.81466666666667],"CONDENSADOR"],["COV-804","COND.VW BORA 05","",0,[124.7,71.49466666666667],"CONDENSADOR"],["COV-804","COND.VW BORA 05","SASHA",3,[129.7,74.36133333333332],"CONDENSADOR"],["COV-804","COND.VW BORA 05","HAVILAND",5,[129.7,74.36133333333332],"CONDENSADOR"],["COV-806","COND.VW CROSSFOX/FOX 07","RACA AIR",1,[123.7,70.92133333333334],"CONDENSADOR"],["COV-806","COND.VW CROSSFOX/FOX 07","GLOBAL AC WIND",3,[119.7,68.628],"CONDENSADOR"],["COV-807","COND.VW SAVEIRO/GOL 05","ROY",0,[104.7,60.028],"CONDENSADOR"],["COV-807","COND.VW SAVEIRO/GOL 05","RACA AIR",0,[108.7,62.321333333333335],"CONDENSADOR"],["COV-807","COND.VW SAVEIRO/GOL 05","GLOBAL AC WIND",9,[108.7,62.321333333333335],"CONDENSADOR"],["COY-802","COND.CHERY ORINOCO 11-13","GLOBAL AC WIND",0,[114.7,65.76133333333334],"CONDENSADOR"],["COY-802","COND.CHERY ORINOCO 11-13","RACA AIR",1,[114.7,65.76133333333334],"CONDENSADOR"],["COY-802","COND.CHERY ORINOCO 11-13","HAVILAND",1,[115.7,66.33466666666668],"CONDENSADOR"],["COY-804","COND.CHERY ARAUCA 12-17","GLOBAL AC WIND",0,[87.7,50.281333333333336],"CONDENSADOR"],["COY-804","COND.CHERY ARAUCA 12-17","GLOBAL AC WIND",0,[89.7,51.428000000000004],"CONDENSADOR"],["COY-804","COND.CHERY ARAUCA 12-17","GLOBAL AC WIND",3,[90.7,52.001333333333335],"CONDENSADOR"],["COY-805","COND.CENTAURO","GLOBAL AC WIND",0,[84.7,48.56133333333334],"CONDENSADOR"],["COY-805","COND.CENTAURO","GLOBAL AC WIND",1,[85.7,49.13466666666667],"CONDENSADOR"],["DEC-706","DESH.DODGE CALIBER/SEBRING 07-09","",0,[36.7,21.041333333333334],"DESHIDRATADOR"],["DEC-706","DESH.DODGE CALIBER/SEBRING 07-09","ZENICF",0,[38.7,22.188],"DESHIDRATADOR"],["DEC-706","DESH.DODGE CALIBER/SEBRING 07-09","GLOBAL AC WIND",2,[38.7,22.188],"DESHIDRATADOR"],["DEC-706","DESH.DODGE CALIBER/SEBRING 07-09","GLOBAL AC WIND",10,[38.7,22.188],"DESHIDRATADOR"],["DEC-706","DESH.DODGE CALIBER/SEBRING 07-09","GLOBAL AIR",5,[38.7,22.188],"DESHIDRATADOR"],["DEF-113","DESH.FORD FIESTA 98-02","GLOBAL AIR",0,[26.7,15.308],"DESHIDRATADOR"],["DEF-113","DESH.FORD FIESTA 98-02","ATC",4,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEF-113","DESHIDRATADOR FORD FIESTA BALITA 96-03","GLOBAL AIR",30,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEF-113","DESHIDRATADOR FORD FIESTA BALITA 96-03","GLOBAL AIR",10,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEF-119","DESH.FORD EXPLORER 98-01","RACA",0,[41.7,23.908],"DESHIDRATADOR"],["DEF-119","DESH.FORD EXPLORER 98-01","GLOBAL AIR",5,[37.7,21.61466666666667],"DESHIDRATADOR"],["DEF-119","DESH.FORD EXPLORER 98-01","GLOBAL AIR",6,[37.7,21.61466666666667],"DESHIDRATADOR"],["DEF-126","DESHIDRATADOR FORD KA","GLOBAL AIR",1,[null,0],"DESHIDRATADOR"],["DEF-126","DESHIDRATADOR FORD KA","RACA AIR",2,[34.7,19.89466666666667],"DESHIDRATADOR"],["DEF-128","DESH.FORD FIESTA POWER 04-12","GLOBAL AC WIND",0,[36.7,21.041333333333334],"DESHIDRATADOR"],["DEF-128","DESH.FORD FIESTA POWER 04-12","RACA AIR",4,[42.7,24.481333333333335],"DESHIDRATADOR"],["DEF-129","DESH.FORD ECOSPORT 04-12","RACA AIR",2,[44.7,25.628],"DESHIDRATADOR"],["DEG-219","DESH.DAEWOO RACER/CIELO R-134A","GLOBAL AIR",13,[36.7,21.041333333333334],"DESHIDRATADOR"],["DEG-226","DESH.DAEWOO CIELO R-134A ORIG.","",0,[null,0],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","",0,[19.7,11.294666666666666],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","GLOBAL AIR",0,[23.7,13.588],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","GLOBAL AIR",0,[25.7,14.734666666666666],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","ZENIF",1,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","GLOBAL AC WIND",13,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEG-227","DESH.GM CAVALIER/SUNFIRE 98-00","GLOBAL AIR",8,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEG-233","DESH.GM SILVERADO/TAHOE V8 00-06","RACA",3,[34.7,19.89466666666667],"DESHIDRATADOR"],["DEJ-405/408","","NEVADA",1,[78.7,45.12133333333333],"DESHIDRATADOR"],["DEV-807","DESHIDRATADOR FORD CONQUISTADOR","GLOBAL AIR",1,[27.7,15.881333333333332],"DESHIDRATADOR"],["DEV-809","DESH.GM BLAZER 95-00","",0,[23.7,13.588],"DESHIDRATADOR"],["DEV-809","DESH.GM BLAZER 95-00","GLOBAL AC WIND",0,[26.7,15.308],"DESHIDRATADOR"],["DEV-809","DESH.GM BLAZER 95-00","GLOBAL AIR",0,[26.7,15.308],"DESHIDRATADOR"],["DEV-809","DESH.GM BLAZER 95-00","SASHA",2,[32.7,18.748],"DESHIDRATADOR"],["ELM-430","ELECTROVENTILADOR COMPLETO HYUNDAI TUCSON","GLOBAL AIR",2,[152.7,87.548],"ELECTROVENTILADOR"],["ELN-811","MOTOR ELECTRO NISSAN SENTRA/TIIDA 09","",0,[70.7,40.534666666666666],"ELECTROVENTILADOR"],["ELN-811","MOTOR ELECTRO NISSAN SENTRA/TIIDA 09","GLOBAL AC WIND",11,[70.7,40.534666666666666],"ELECTROVENTILADOR"],["ELT-315","","MASTER KING",20,[59.03,33.84386666666666],"ELECTROVENTILADOR"],["EVC-701","","UNICOOL",2,[103.7,59.45466666666667],"EVAPORADOR"],["EVC-705","EVAPORADOR DODGE GRAN CARAVAN 01-04","GLOBAL AC WIND",1,[114.7,65.76133333333334],"EVAPORADOR"],["EVC-705","EVAPORADOR DODGE GRAN CARAVAN 01-04","GLOBAL AC WIND",1,[114.7,65.76133333333334],"EVAPORADOR"],["EVC-705","EVAPORADOR DODGE GRAN CARAVAN 01-04","GLOBAL AIR",2,[114.7,65.76133333333334],"EVAPORADOR"],["EVC-706","EVAP.DODGE NEON 98-02","",0,[76.07,43.61346666666667],"EVAPORADOR"],["EVC-706","EVAPORADOR DODGE NEON 98-02","UNICOOL",1,[null,0],"EVAPORADOR"],["EVC-706","EVAPORADOR DODGE NEON 98-02","GLOBAL AIR",1,[null,0],"EVAPORADOR"],["EVC-716","EVAP.DODGE GRAND CARAVAN 01-04","",0,[76.7,43.974666666666664],"EVAPORADOR"],["EVC-718","EVAP.DODGE DAKOTA 05-08 CONEX.RAP.","",2,[97.7,56.01466666666667],"EVAPORADOR"],["EVC-719","EVAPORADOR DODGE CALIBER TOMA BLOQUE 11-12","GLOBAL AIR",2,[80.7,46.268],"EVAPORADOR"],["EVF-105","EVAP.FORD EXPLORER 12-18 POST.","RACA",1,[89.7,51.428000000000004],"EVAPORADOR"],["EVF-105","EVAP.FORD EXPLORER 12-18 POST.","HAVILAND",2,[90.7,52.001333333333335],"EVAPORADOR"],["EVF-110","","RACA AIR",1,[null,0],"EVAPORADOR"],["EVF-115","EVAPORADOR FORD LASER CONEXION RAPIDA 98-02","RACA AIR",1,[81.7,46.84133333333333],"EVAPORADOR"],["EVF-123","EVAP. FORD FORTALEZA 98-07","RACA AIR",0,[94.7,54.294666666666664],"EVAPORADOR"],["EVF-123","EVAP. FORD FORTALEZA 98-07","GLOBAL AC WIND",10,[94.7,54.294666666666664],"EVAPORADOR"],["EVF-124","EVAP. FORD EXPLORER 98","GLOBAL AC WIND",0,[90.7,52.001333333333335],"EVAPORADOR"],["EVF-124","EVAP. FORD EXPLORER 98","RACA AIR",2,[90.7,52.001333333333335],"EVAPORADOR"],["EVF-124","EVAP. FORD EXPLORER 98","HAVILAND",4,[92.7,53.148],"EVAPORADOR"],["EVF-127","EVAP.FORD LASER 95-98","",3,[77.7,44.548],"EVAPORADOR"],["EVF-131","EVAP.FORD TRITON F-350 99-10","",0,[70.7,40.534666666666666],"EVAPORADOR"],["EVF-131","EVAP.FORD TRITON F-350 99-10","GLOBAL AC WIND",0,[90.7,52.001333333333335],"EVAPORADOR"],["EVF-131","EVAP.FORD TRITON F-350 99-10","RACA AIR",5,[90.7,52.001333333333335],"EVAPORADOR"],["EVF-136","EVAPORADOR FORD FESTIVA 86-93","GLOBAL AIR",0,[92.7,53.148],"EVAPORADOR"],["EVF-136","EVAPORADOR FORD FESTIVA 86-93","HAVILAND",2,[92.7,53.148],"EVAPORADOR"],["EVF-137","EVAP.FORD FIESTA 97-03 / KA","",0,[70.7,40.534666666666666],"EVAPORADOR"],["EVF-137","EVAP.FORD FIESTA 97-03 / KA","ATC",0,[70.7,40.534666666666666],"EVAPORADOR"],["EVF-137","EVAP.FORD FIESTA 97-03 / KA","UNICOOL",0,[null,0],"EVAPORADOR"],["EVF-137","EVAP.FORD FIESTA 97-03 / KA","ECA",1,[89.7,51.428000000000004],"EVAPORADOR"],["EVF-137","EVAP.FORD FIESTA 97-03 / KA","RACA AIR",3,[89.7,51.428000000000004],"EVAPORADOR"],["EVF-139","EVAP.FORD MUSTANG COBRA 07-08","ROY",0,[89.03,51.043866666666666],"EVAPORADOR"],["EVF-139","EVAP.FORD MUSTANG COBRA 07-08","HAVILAND",2,[89.7,51.428000000000004],"EVAPORADOR"],["EVF-140","EVAP. FORD FIESTA POWER 04-12","RACA AIR",6,[80.7,46.268],"EVAPORADOR"],["EVF-140","EVAP. FORD FIESTA POWER 04-12","GLOBAL AIR",3,[80.7,46.268],"EVAPORADOR"],["EVF-153","EVAP. FORD F-250 SUPER DUTY 11-13 TANQUE","",0,[83.7,47.988],"EVAPORADOR"],["EVF-154","EVAP. FORD EXPLORER 12-18","GLOBAL AC WIND",2,[94.7,54.294666666666664],"EVAPORADOR"],["EVG-200","EVAP. CHEVROLET IMPALA 00-03","GLOBAL AIR",0,[85.7,49.13466666666667],"EVAPORADOR"],["EVG-204","EVAPORADOR CHEVROLET MALIBU 78-81","GLOBAL AIR",1,[105.7,60.601333333333336],"EVAPORADOR"],["EVG-205","EVAPORADOR C 10 SILVERADO 85-89","GLOBAL AIR",0,[64.7,37.09466666666667],"EVAPORADOR"],["EVG-210","EVAPORADOR ASTRA 98-04","GLOBAL AIR",3,[94.7,54.294666666666664],"EVAPORADOR"],["EVG-213","EVAPORADOR CHEVROLET IMPALA SS TOMA BLOQUE","NEVADA",5,[103.7,59.45466666666667],"EVAPORADOR"],["EVG-218","EVAPORADOR CHEVROLET CAPTIVA","GLOBAL AIR",3,[89.7,51.428000000000004],"EVAPORADOR"],["EVG-218","EVAPORADOR CHEVROLET CAPTIVA","UNICOOL",2,[89.7,51.428000000000004],"EVAPORADOR"],["EVG-221","EVAPORADOR CHEVROLET BLAZER 95-00","GLOBAL AIR",2,[86.7,49.708000000000006],"EVAPORADOR"],["EVG-221","EVAPORADOR CHEVROLET BLAZER 95-00","GLOBAL AC WIND",10,[86.7,49.708000000000006],"EVAPORADOR"],["EVG-223","EVAP.GM CORSA/MONTANA 06-08","",1,[105.7,60.601333333333336],"EVAPORADOR"],["EVG-225","EVAP.GM CENTURY 94-96 R-134A","",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVG-231","EVAP.GM SPARK 07-11","RACA AIR",4,[73.7,42.254666666666665],"EVAPORADOR"],["EVG-231","EVAP.GM SPARK 07-11","GLOBAL AC WIND",2,[73.7,42.254666666666665],"EVAPORADOR"],["EVG-232","EVAP.DAEWOO CIELO/RACER 98-02","",0,[59.7,34.228],"EVAPORADOR"],["EVG-232","EVAP.DAEWOO CIELO/RACER 98-02","ATC",0,[59.7,34.228],"EVAPORADOR"],["EVG-232","EVAPORADOR DAEWOO CIELO 98-02","GLOBAL AIR",0,[68.7,39.388000000000005],"EVAPORADOR"],["EVG-232","EVAPORADOR DAEWOO CIELO 98-02","GLOBAL AIR",0,[80.7,46.268],"EVAPORADOR"],["EVG-232","EVAPORADOR DAEWOO CIELO 98-02","GLOBAL AIR",4,[80.7,46.268],"EVAPORADOR"],["EVG-237","EVAP. CHEVROLET CAVALIER 97-05","GLOBAL AIR",0,[80.7,46.268],"EVAPORADOR"],["EVG-237","EVAP. CHEVROLET CAVALIER 97-05","ZENIF",0,[89.7,51.428000000000004],"EVAPORADOR"],["EVG-245","EVAP.GM CORSA 01-02","ROY",1,[78.7,45.12133333333333],"EVAPORADOR"],["EVG-245","EVAP.GM CORSA 01-02","RACA AIR",2,[78.7,45.12133333333333],"EVAPORADOR"],["EVG-246","EVAP.DAEWOO LANOS/NUBIRA 98-02","GLOBAL AIR",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVG-246","EVAP.DAEWOO LANOS/NUBIRA 98-02","GLOBAL AIR",4,[83.7,47.988],"EVAPORADOR"],["EVG-246","EVAP.DAEWOO LANOS/NUBIRA 98-02","GLOBALACWIND",3,[83.7,47.988],"EVAPORADOR"],["EVG-246","EVAP.DAEWOO LANOS/NUBIRA 98-02","UNICOOL",13,[80.7,46.268],"EVAPORADOR"],["EVG-254","EVAP.GM WAGON R 98-03","ROY",0,[69.7,39.961333333333336],"EVAPORADOR"],["EVG-256","EVAPORADOR GM AVEO GRUESO","RACA AIR",2,[76.7,43.974666666666664],"EVAPORADOR"],["EVG-257","EVAPORADOR GM GRAND VITARA 99-01","RACA AIR",1,[89.7,51.428000000000004],"EVAPORADOR"],["EVG-258","EVAP.GM GRAND VITARA XL7 03-05","RACA AIR",5,[81.7,46.84133333333333],"EVAPORADOR"],["EVG-262","EVAP. GM OPTRA 05 FINO","RACA AIR",1,[70.7,40.534666666666666],"EVAPORADOR"],["EVG-263","EVAP. GM GRAND VITARA XL7 05-07 POST","ATC",0,[59.7,34.228],"EVAPORADOR"],["EVG-263","EVAPORADOR XL7 TRASERO 05-07","GLOBAL AIR",0,[65.7,37.668000000000006],"EVAPORADOR"],["EVG-263","EVAPORADOR XL7 TRASERO 05-07","GLOBAL AC WIND",1,[65.7,37.668000000000006],"EVAPORADOR"],["EVG-264","EVAP.GM OPTRA DESIGN/ADVANCE 06-10","RACA AIR",4,[77.7,44.548],"EVAPORADOR"],["EVG-265","EVAP. GM EPICA","GLOBAL AIR",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVG-265","EVAP. GM EPICA","GLOBAL AIR",3,[87.7,50.281333333333336],"EVAPORADOR"],["EVG-265","EVAP. GM EPICA","GLOBAL AIR",5,[87.7,50.281333333333336],"EVAPORADOR"],["EVG-269","EVAP.GM TRAIL BLAZER 04","",0,[59.6,34.17066666666667],"EVAPORADOR"],["EVH-602","EVAPORADOR HONDA ACCORD 08-12","RACA AIR",1,[null,0],"EVAPORADOR"],["EVH-605","EVAP. HONDA FIT 06-07","GLOBAL AC WIND",0,[78.7,45.12133333333333],"EVAPORADOR"],["EVH-605","EVAP. HONDA FIT 06-07","GLOBAL AC WIND",2,[84.7,48.56133333333334],"EVAPORADOR"],["EVH-606","EVAP.HONDA CIVIC 96-00","GLOBAL AC WIND",0,[117.7,67.48133333333334],"EVAPORADOR"],["EVH-610","EVAP.HONDA CIVIC/CR-V 01-06","GLOBAL AC WIND",1,[80.7,46.268],"EVAPORADOR"],["EVH-619","EVAPORADOR HONDA ODYSSEY 95-00","GLOBAL AIR",0,[76.7,43.974666666666664],"EVAPORADOR"],["EVH-619","EVAPORADOR HONDA ODYSSEY 95-00","GLOBAL AC WIND",1,[94.7,54.294666666666664],"EVAPORADOR"],["EVH-620","EVAP.HONDA PILOT 09-14/ODYSSEY 05-10","UNICOOL",1,[94.7,54.294666666666664],"EVAPORADOR"],["EVH-624","EVAP.HONDA CIVIC 06-09 EEUU PLACAS","GLOBAL AC WIND",1,[97.7,56.01466666666667],"EVAPORADOR"],["EVI-603","EVAP.FIAT TEMPRA R-134A","ROY",0,[60.7,34.80133333333333],"EVAPORADOR"],["EVJ-400","EVAP.JEEP CHEROKEE KK 08-12","RACA AIR",0,[78.7,45.12133333333333],"EVAPORADOR"],["EVJ-406","EVAP. JEEP CHEROKEE KJ 02-07 LIBERTY FINO","RACA AIR",1,[null,0],"EVAPORADOR"],["EVJ-410","EVAP.JEEP G.CHEROKEE/RAM 95-98","ROY",2,[110.7,63.467999999999996],"EVAPORADOR"],["EVJ-412","EVAP. JEEP GRAND CHEROKEE 06-11","RACA AIR",2,[88.7,50.85466666666667],"EVAPORADOR"],["EVJ-416","EVAP.JEEP GRAND CHEROKEE 03-05 V/BLOCK","",0,[59.7,34.228],"EVAPORADOR"],["EVJ-418","EVAP.JEEP GRAND CHEROKEE 11-16","",0,[82.7,47.41466666666667],"EVAPORADOR"],["EVJ-418","EVAP.JEEP GRAND CHEROKEE 11-16","RACA AIR",1,[null,0],"EVAPORADOR"],["EVJ-418","EVAP.JEEP GRAND CHEROKEE 11-16","GLOBAL AC WIND",1,[89.7,51.428000000000004],"EVAPORADOR"],["EVJ-418","EVAP.JEEP GRAND CHEROKEE 11-16","GLOBAL AC WIND",4,[89.7,51.428000000000004],"EVAPORADOR"],["EVJ-420","EVAPORADOR JEEP CHEROKEE 95-00","GLOBAL AIR",1,[84.7,48.56133333333334],"EVAPORADOR"],["EVK-101","EVAPORADOR KIA RIO STYLUS GRUESO","RACA AIR",1,[89.7,51.428000000000004],"EVAPORADOR"],["EVK-105","EVAP.KIA PICANTO 04-07","RACA AIR",0,[89.7,51.428000000000004],"EVAPORADOR"],["EVK-105","EVAP.KIA PICANTO 04-07","RACA AIR",0,[89.7,51.428000000000004],"EVAPORADOR"],["EVK-105","EVAP.KIA PICANTO 04-07","GLOBAL AC WIND",2,[84.7,48.56133333333334],"EVAPORADOR"],["EVK-106","EVAPORADOR KIA PREGIO","GLOBAL AC WIND",2,[82.7,47.41466666666667],"EVAPORADOR"],["EVK-114","EVAP.KIA SEDONA 08/CARENS 07-09","GLOBAL AC WIND",0,[94.7,54.294666666666664],"EVAPORADOR"],["EVK-114","EVAP.KIA SEDONA 08/CARENS 07-09","GLOBAL AC WIND",2,[91.7,52.574666666666666],"EVAPORADOR"],["EVK-115","EVAPORADOR KIA SORENTO 07-08","GLOBAL AC WIND",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-103","EVAP. MAZDA 6","RACA AIR",1,[80.7,46.268],"EVAPORADOR"],["EVM-104","EVAP. MAZDA BT50","RACA AIR",2,[76.7,43.974666666666664],"EVAPORADOR"],["EVM-408","EVAP.HYUNDAI ACCENT 01-02 TIPO FAACA","GLOBAL AC WIND",0,[84.7,48.56133333333334],"EVAPORADOR"],["EVM-408","EVAP.HYUNDAI ACCENT 01-02 TIPO FAACA","GLOBAL AIR",1,[84.7,48.56133333333334],"EVAPORADOR"],["EVM-409","EVAP.MITSUBISHI MONTERO SPORT 97-06","UNICOOL",0,[87.7,50.281333333333336],"EVAPORADOR"],["EVM-415","","RACA AIR",1,[null,0],"EVAPORADOR"],["EVM-417","EVAPORADOR HYUNDAI TUCSON/SPORTAGE 11-14","GLOBAL AIR",1,[72.7,41.681333333333335],"EVAPORADOR"],["EVM-421","EVAPORAR MITSUBISHI LANCER FINO","GLOBAL AC WIND",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-421","EVAPORAR MITSUBISHI LANCER FINO","GLOBAL AC WIND",2,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-423","EVAP.HYUNDAI SANTA FE/SONATA 06-09","UNICOOL",0,[84.7,48.56133333333334],"EVAPORADOR"],["EVM-423","EVAP.HYUNDAI SANTA FE/SONATA 06-09","RACA AIR",2,[84.7,48.56133333333334],"EVAPORADOR"],["EVM-425","EVAPORADOR HYUNDAI ACCENT TOMA BLOQUE","RACA AIR",1,[96.7,55.44133333333333],"EVAPORADOR"],["EVM-428","EVAPORADOR HYUNDAI ELANTRA/TUCSON 07-09","GLOBAL AIR",0,[69.7,39.961333333333336],"EVAPORADOR"],["EVM-428","EVAPORADOR HYUNDAI ELANTRA/TUCSON 07-09","RACA AIR",2,[76.7,43.974666666666664],"EVAPORADOR"],["EVM-432","EVAP.MITSUBISHI LANCER 03-12","ATC",1,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-432","EVAP.MITSUBISHI LANCER 03-12","RACA",2,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-432","EVAP.MITSUBISHI LANCER 03-12","GLOBAL AIR",3,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-435","EVAPORADOR HYUNDAI TUCSON GRUESO 05-08","RACA AIR",1,[84.7,48.56133333333334],"EVAPORADOR"],["EVM-443","EVAPORADOR HYUNDAI GETZ","RACA AIR",0,[79.7,45.69466666666666],"EVAPORADOR"],["EVM-443","EVAPORADOR HYUNDAI GETZ","UNICOOL",3,[83.7,47.988],"EVAPORADOR"],["EVM-446","EVAP.HYUNDAI VERACRUZ 07-12","GLOBAL AC WIND",1,[102.7,58.88133333333334],"EVAPORADOR"],["EVN-805","EVAPORADOR NISSAN SENTRA 98-99","GLOBAL AIR",0,[89.7,51.428000000000004],"EVAPORADOR"],["EVN-805","EVAPORADOR NISSAN SENTRA 98-99","GLOBAL AIR",2,[89.7,51.428000000000004],"EVAPORADOR"],["EVN-810","EVAP.NISSAN X-TRAIL 05-07","ROY",0,[74.7,42.828],"EVAPORADOR"],["EVN-810","EVAP.NISSAN X-TRAIL 05-07","ROY",5,[85.7,49.13466666666667],"EVAPORADOR"],["EVN-810","EVAP.NISSAN X-TRAIL 05-07","HAVILAND",4,[85.7,49.13466666666667],"EVAPORADOR"],["EVP-501","EVAPORADOR PEGAUOT 206","GLOBAL AIR",1,[null,0],"EVAPORADOR"],["EVR-501","EVAPORADOR RENAULT TWINGO 96-10","ECA",1,[99.7,57.16133333333333],"EVAPORADOR"],["EVR-506","EVAP.RENAULT CLIO/SIMBOL 99-02","ATC",0,[66.7,38.24133333333334],"EVAPORADOR"],["EVR-506","EVAP.RENAULT CLIO/SIMBOL 99-02","GLOBAL AC WIND",3,[69.7,39.961333333333336],"EVAPORADOR"],["EVR-507","EVAP. RENAULT MEGANE","GLOBAL AC WIND",0,[67.7,38.81466666666667],"EVAPORADOR"],["EVR-507","EVAP. RENAULT MEGANE","GLOBAL AIR",0,[73.7,42.254666666666665],"EVAPORADOR"],["EVR-507","EVAP. RENAULT MEGANE","RACA AIR",5,[73.7,42.254666666666665],"EVAPORADOR"],["EVS-231","EVAP.DAEWOO MATIZ/CHERY QQ 01-04","UNICOOL",5,[74.7,42.828],"EVAPORADOR"],["EVS-900","EVAP.UNIVERSAL 4 REJILLAS 12V GRIS MATE","GLOBAL AIR",1,[162.7,93.28133333333332],"EVAPORADOR"],["EVS-901","EVAP.UNIV.4 DUCTOS 2,5\" 12V 13100 BTU","GLOBAL AIR",0,[135.7,77.80133333333332],"EVAPORADOR"],["EVS-901","EVAP.UNIV.4 DUCTOS 2,5\" 12V 13100 BTU","GLOBAL AIR",0,[130.7,74.93466666666666],"EVAPORADOR"],["EVS-905","EVAP.UNIV.4 REJILLAS NEGRO 12V 13100 BTU","GLOBAL AIR",0,[124.7,71.49466666666667],"EVAPORADOR"],["EVS-917","EVAP.VAN FTE.DECORATIVO MADERA","GLOBAL AIR",2,[159.7,91.56133333333332],"EVAPORADOR"],["EVT-308","EVAPORADOR TOYOTA CAMRY 07-10 TANQUE","RACA AIR",2,[94.7,54.294666666666664],"EVAPORADOR"],["EVT-309","EVAP.TOYOTA CAMRY 03-05","",0,[61.67,35.35746666666667],"EVAPORADOR"],["EVT-309","EVAP.TOYOTA CAMRY 03-05","GLOBAL AC WIND",1,[81.7,46.84133333333333],"EVAPORADOR"],["EVT-310","EVAP.TOYOTA BURB./RORAIMA 02-08","ROY",1,[63.7,36.52133333333333],"EVAPORADOR"],["EVT-317","EVAP.TOYOTA HILUX 02-04","",0,[67.7,38.81466666666667],"EVAPORADOR"],["EVT-336","EVAP.TOYOTA COROLLA 1994-1997 R-134A","GLOBAL AC WIND",2,[96.7,55.44133333333333],"EVAPORADOR"],["EVT-336","EVAP.TOYOTA COROLLA 1994-1997 R-134A","GLOBAL AC WIND",1,[96.7,55.44133333333333],"EVAPORADOR"],["EVT-343","EVAPORADOR TOYOTA COROLLA NEW SENSATION 03-07","GLOBAL AC WIND",5,[79.7,45.69466666666666],"EVAPORADOR"],["EVT-347","EVAP.TOYOTA TERIOS 02-07","RACA",6,[76.7,43.974666666666664],"EVAPORADOR"],["EVT-347","EVAP.TOYOTA TERIOS 02-07","GLOBAL AC WIND",0,[76.7,43.974666666666664],"EVAPORADOR"],["EVT-348","EVAPORADOR HILUX KAVAK TOMA CRUZADA","GLOBAL AC WIND",1,[81.7,46.84133333333333],"EVAPORADOR"],["EVT-361","EVAP.TOYOTA COROLLA/FORTUNER/HIACE 09-14","RACA",3,[78.7,45.12133333333333],"EVAPORADOR"],["EVT-361","EVAP.TOYOTA COROLLA/FORTUNER/HIACE 09-14","GLOBAL AIR",8,[78.7,45.12133333333333],"EVAPORADOR"],["EVV-801","EVAP. VW FOX 06-10","GLOBAL AC WIND",0,[77.7,44.548],"EVAPORADOR"],["EVV-801","EVAP. VW FOX 06-10","GLOBAL AC WIND",0,[81.7,46.84133333333333],"EVAPORADOR"],["EVV-801","EVAP. VW FOX 06-10","RACA AIR",2,[81.7,46.84133333333333],"EVAPORADOR"],["EVV-802","EVAP.VW GOLF/JETTA/AUDI A3 06-12","",0,[89.7,51.428000000000004],"EVAPORADOR"],["EVV-802","EVAP.VW GOLF/JETTA/AUDI A3 06-12","GLOBAL AIR",2,[89.7,51.428000000000004],"EVAPORADOR"],["EVV-802","EVAP.VW GOLF/JETTA/AUDI A3 06-12","GLOBAL AC WIND",2,[90.7,52.001333333333335],"EVAPORADOR"],["EVV-803","EVAP.VW BORA/JETTA 02-07","",0,[83.7,47.988],"EVAPORADOR"],["EVV-803","EVAP.VW BORA/JETTA 02-07","GLOBAL AIR",1,[83.7,47.988],"EVAPORADOR"],["EVV-803","EVAP.VW BORA/JETTA 02-07","RACA AIR",1,[83.7,47.988],"EVAPORADOR"],["EVV-804","EVAP.VW GOL 07","RACA AIR",1,[79.7,45.69466666666666],"EVAPORADOR"],["EVV-804","EVAP.VW GOL 07","UNICOOL",5,[73.7,42.254666666666665],"EVAPORADOR"],["EVV-805","EVAP.VW GOL TOMA BLOQUE","RACA AIR",2,[90.7,52.001333333333335],"EVAPORADOR"],["EVW-701","","GLOBAL AIR",2,[94.7,54.294666666666664],"EVAPORADOR"],["EVW-702","","GLOBAL AIR",5,[99.7,57.16133333333333],"EVAPORADOR"],["EVW-703","EVAP.BMW E46 SERIE 3 98-06","",0,[73.7,42.254666666666665],"EVAPORADOR"],["EVY-807","EVAPORADOR CHERY ORINOCO 11-17","RACA AIR",1,[95.7,54.868],"EVAPORADOR"],["FIC-703","FILTRO DODGE CARAVAN 96-00","GLOBAL AC WIND",3,[22.7,13.014666666666667],"FILTRO SECANTE"],["FIC-709","FILTRO CHERYSLER NEON 00-01","GLOBAL AC WIND",4,[15.7,9.001333333333333],"FILTRO SECANTE"],["FIC-709","FILTRO SECANTE CHRYSLER NEON 00-05","GLOBAL AIR",4,[15.7,9.001333333333333],"FILTRO SECANTE"],["FID-202","FILTRO DAEWOO","",0,[16.7,9.574666666666666],"FILTRO SECANTE"],["FID-202","FILTRO DAEWOO","UNICOOL",1,[16.7,9.574666666666666],"FILTRO SECANTE"],["FID-202","FILTRO DAEWOO","GLOBAL AC WIND",4,[16.7,9.574666666666666],"FILTRO SECANTE"],["FID-203","FILTRO DAEWOO LANOS","",0,[17.7,10.148],"FILTRO SECANTE"],["FID-203","FILTRO DAEWOO LANOS","UNICOOL",null,[17.7,10.148],"FILTRO SECANTE"],["FID-203","FILTRO DAEWOO LANOS","GLOBAL AC WIND",2,[17.7,10.148],"FILTRO SECANTE"],["FID-205","FILTRO DAEWOO NUBIRA","GLOBAL AC WIND",2,[16.7,9.574666666666666],"FILTRO SECANTE"],["FID-205","FILTRO DAEWOO NUBIRA","GLOBAL AC WIND",6,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIF-109","FILTRO FORD LASER 95-97","",0,[20.03,11.483866666666666],"FILTRO SECANTE"],["FIG-205","FILTRO GM MERIVA","UNICOOL",10,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIG-207","FILTRO GM OPTRA 04-13","GLOBAL AIR",10,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIG-213","FILTRO GM CORSA 00-03","GLOBAL AIR",0,[17.7,10.148],"FILTRO SECANTE"],["FIG-213","FILTRO GM CORSA 00-03","GLOBAL AC WIND",1,[18.17,10.417466666666668],"FILTRO SECANTE"],["FIH-604","FILTRO HONDA CIVIC 95-00","",0,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIH-604","FILTRO HONDA CIVIC 95-00","GLOBAL AIR",2,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIH-604","FILTRO HONDA CIVIC 95-00","GLOBAL AC WIND",6,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIH-604","FILTRO HONDA CIVIC 95-00","GLOBAL AIR",15,[16.7,9.574666666666666],"FILTRO SECANTE"],["FIM-101","FILTRO MAZDA 3 04-06","",0,[17.7,10.148],"FILTRO SECANTE"],["FIM-101","FILTRO MAZDA 3 04-06","GLOBAL AC WIND",6,[17.7,10.148],"FILTRO SECANTE"],["FIM-101","FILTRO MAZDA 3 04-06","GLOBAL AC WIND",4,[17.7,10.148],"FILTRO SECANTE"],["FIM-406","FILTRO MITSUBISHI LANCER 95-00","GLOBAL AC WIND",1,[19.7,11.294666666666666],"FILTRO SECANTE"],["FIM-406","FILTRO MITSUBISHI LANCER 95-00","GLOBAL AC WIND",4,[19.7,11.294666666666666],"FILTRO SECANTE"],["FIM-407","FILTRO HYUNDAI ACCENT 98-05","GLOBAL AC WIND",0,[15.7,9.001333333333333],"FILTRO SECANTE"],["FIM-407","FILTRO HYUNDAI ACCENT 98-05","GLOBAL AC WIND",0,[17.07,9.786800000000001],"FILTRO SECANTE"],["FIM-407","FILTRO HYUNDAI ACCENT 98-05","GLOBAL AC WIND",17,[17.07,9.786800000000001],"FILTRO SECANTE"],["FIM-407","FILTRO HYUNDAI ACCENT 98-05","GLOBAL AC WIND",6,[17.07,9.786800000000001],"FILTRO SECANTE"],["FIM-414","FILTRO MITSUBISHI SIGNO","GLOBAL AC WIND",11,[20.7,11.867999999999999],"FILTRO SECANTE"],["FIN-803","FILTRO NISSAN SENTRA B-13/MAXIMA 96-98","GLOBAL AC WIND",3,[17.7,10.148],"FILTRO SECANTE"],["FIN-804","FILTRO SECANTE NISSAN SENTRA B14","GLOBAL AIR",8,[18.7,10.721333333333334],"FILTRO SECANTE"],["FIN-807","FILTRO NISSAN ALMERA/FRONTIER 05-10","GLOBAL AC WIND",4,[20.7,11.867999999999999],"FILTRO SECANTE"],["FIP-501","FILTRO SECANTE PEUGEOT 206","GLOBAL AC WIND",3,[17.7,10.148],"FILTRO SECANTE"],["FIP-501","FILTRO SECANTE PEUGEOT 206","GLOBAL AC WIND",5,[17.7,10.148],"FILTRO SECANTE"],["FIP-501","FILTRO SECANTE PEUGEOT 206","GLOBAL AC WIND",20,[17.7,10.148],"FILTRO SECANTE"],["FIR-502","FILTRO RENAULT TWINGO","GLOBAL AC WIND",0,[17.7,10.148],"FILTRO SECANTE"],["FIR-502","FILTRO RENAULT TWINGO","GLOBAL AC WIND",2,[18.7,10.721333333333334],"FILTRO SECANTE"],["FIR-502","FILTRO RENAULT TWINGO","GLOBAL AC WIND",5,[18.7,10.721333333333334],"FILTRO SECANTE"],["FIR-502","FILTRO RENAULT TWINGO","GLOBAL AC WIND",6,[18.7,10.721333333333334],"FILTRO SECANTE"],["FIT-307","FILTRO TOYOTA R-134A","",0,[14.7,8.427999999999999],"FILTRO SECANTE"],["FIT-307","FILTRO TOYOTA R-134A","GLOBAL AIR",14,[14.7,8.427999999999999],"FILTRO SECANTE"],["FIT-307","FILTRO TOYOTA R-134A","AC PARTS",5,[17.7,10.148],"FILTRO SECANTE"],["FIT-307","FILTRO TOYOTA R-134A","GLOBAL AC WIND",10,[17.7,10.148],"FILTRO SECANTE"],["FIV-802","","ZENICF",5,[23.7,13.588],"FILTRO SECANTE"],["MAG-203","MANGUERA 13/32 OPTRA ALTA","GLOBAL AIR",0,[34.7,19.89466666666667],"MANGUERA"],["MAG-203","MANGUERA 13/32 OPTRA ALTA","GLOBAL AIR",0,[35.7,20.468],"MANGUERA"],["MAG-203","MANGUERA 13/32 OPTRA ALTA","GLOBAL AIR",8,[36.7,21.041333333333334],"MANGUERA"],["MAG-203","MANGUERA 13/32 OPTRA ALTA","GLOBAL AIR",5,[36.7,21.041333333333334],"MANGUERA"],["MAG-203","MANGUERA 13/32 OPTRA ALTA","GLOBAL AC WIND",10,[36.7,21.041333333333334],"MANGUERA"],["MAG-205","MANGUERA 13/32 AVEO ALTA","GLOBAL AIR",0,[33.7,19.321333333333335],"MANGUERA"],["MAG-205","MANGUERA 13/32 AVEO ALTA","GLOBAL AC WIND",8,[33.7,19.321333333333335],"MANGUERA"],["MOC-701","MOTOR VENT.DODGE CALIBER 07-12","RACA",3,[70.7,40.534666666666666],"MOTOR"],["MOF-104","MOTOR VENT.FORD F-350 TRITON 00-10","",0,[73.7,42.254666666666665],"MOTOR"],["MOF-104","MOTOR VENT.FORD F-350 TRITON 00-10","RACA",0,[69.7,39.961333333333336],"MOTOR"],["MOF-104","MOTOR VENT.FORD F-350 TRITON 00-10","GLOBAL AIR",10,[79.7,45.69466666666666],"MOTOR"],["MOF-106","MOTOR VENT.FORD BRONCO/LARIAT 87-97","RACA AIR",1,[70.7,40.534666666666666],"MOTOR"],["MOF-111","MOTOR VENT.FORD FUSION 06-08","RACA",1,[74.7,42.828],"MOTOR"],["MOF-112","MOTOR VENT.FORD F-150 FORTALEZA 98-03","RACA AIR",4,[71.7,41.108000000000004],"MOTOR"],["MOF-114","MOTOR VENT.FORD FX-4 04-08","RACA AIR",2,[67.7,38.81466666666667],"MOTOR"],["MOF-118","MOTOR VENT.FORD LASER 99-02","GLOBAL AIR",2,[78.7,45.12133333333333],"MOTOR"],["MOF-118","MOTOR VENT.FORD LASER 99-02","RACA",2,[78.7,45.12133333333333],"MOTOR"],["MOF-119","MOTOR VENT.FORD EXPLORER 04-10","GLOBAL AC WIND",1,[79.7,45.69466666666666],"MOTOR"],["MOF-119","MOTOR VENT.FORD EXPLORER 04-10","RACA",2,[79.7,45.69466666666666],"MOTOR"],["MOF-122","MOTOR VENT.FORD ESCAPE 01-07","",0,[79.7,45.69466666666666],"MOTOR"],["MOF-124","MOTOR VENT.ECO SPORT/FIESTA POWER 04-12","",0,[81.7,46.84133333333333],"MOTOR"],["MOF-124","MOTOR VENT.ECO SPORT/FIESTA POWER 04-12","GLOBAL AC WIND",0,[81.7,46.84133333333333],"MOTOR"],["MOF-124","MOTOR VENT.ECO SPORT/FIESTA POWER 04-12","GLOBAL AC WIND",0,[84.7,48.56133333333334],"MOTOR"],["MOF-124","MOTOR VENT.ECO SPORT/FIESTA POWER 04-12","GLOBAL AC WIND",1,[84.7,48.56133333333334],"MOTOR"],["MOF-124","MOTOR VENT.ECO SPORT/FIESTA POWER 04-12","GLOBAL AC WIND",4,[84.7,48.56133333333334],"MOTOR"],["MOF-130","MOTOR VENT.FORD EXPLORER 95-03","RACA AIR",3,[69.7,39.961333333333336],"MOTOR"],["MOF-133","MOTOR VENT.FORD SUPER DUTY F-250/350 16","RACA",2,[79.7,45.69466666666666],"MOTOR"],["MOG-200","MOTOR VENT.GM CAVALIER 95-00","",0,[86.7,49.708000000000006],"MOTOR"],["MOG-200","MOTOR VENT.GM CAVALIER 95-00","NEVADA",0,[84.7,48.56133333333334],"MOTOR"],["MOG-200","MOTOR VENT.GM CAVALIER 95-00","NEVADA",1,[86.7,49.708000000000006],"MOTOR"],["MOG-200","MOTOR VENT.GM CAVALIER 95-00","RACA AIR",2,[86.7,49.708000000000006],"MOTOR"],["MOG-206","MOTOR VENT.GM TAHOE/SILV.02-06","GLOBAL AIR",2,[70.7,40.534666666666666],"MOTOR"],["MOG-210","MOTOR VENT. GM CORSA 98-06","GLOBAL AC WIND",3,[80.7,46.268],"MOTOR"],["MOG-211","MOTOR VENT GM OPTRA 05-11","RACA",1,[69.7,39.961333333333336],"MOTOR"],["MOG-211","MOTOR VENT.GM OPTRA 05-11","GLOBAL AIR",4,[69.7,39.961333333333336],"MOTOR"],["MOG-226","MOTOR VENT.GM LUV D-MAX","RACA AIR",32,[72.7,41.681333333333335],"MOTOR"],["MOG-226","MOTOR VENT.GM LUV D-MAX","GLOBAL AC WIND",10,[74.7,42.828],"MOTOR"],["MOG-226","MOTOR VENT.GM LUV D-MAX","GLOBAL AC WIND",4,[74.7,42.828],"MOTOR"],["MOG-231","MOTOR VENT.GM TRAIL BLAZER 02-07","",0,[75.7,43.40133333333333],"MOTOR"],["MOG-231","MOTOR VENT.GM TRAIL BLAZER 02-07","RACA AIR",2,[74.7,42.828],"MOTOR"],["MOG-237","MOTOR VENT.GM CRUZE/ORLANDO 12-15","RACA AIR",20,[79.7,45.69466666666666],"MOTOR"],["MOH-601","MOTOR VENT.HONDA CIVIC EMOTION 06-08","",3,[70.7,40.534666666666666],"MOTOR"],["MOH-603","MOTOR VENT.HONDA CIVIC 92-00/ACCORD 98","",0,[97.7,56.01466666666667],"MOTOR"],["MOH-604","MOTOR VENT.NISSAN/HYUNDAI/KIA/TOYOTA","GLOBAL AIR",2,[84.7,48.56133333333334],"MOTOR"],["MOI-604","MOTOR VENT.FIAT PALIO FIRE CON TURBINA","RACA",1,[null,0],"MOTOR"],["MOJ-401","MOTOR VENT.JEEP GRAND CHEROKEE 99-02","GLOBAL AIR",2,[84.7,48.56133333333334],"MOTOR"],["MOJ-407","MOTOR VENT.JEEP CHEROKEE 97-01","GLOBAL AIR",0,[99.7,57.16133333333333],"MOTOR"],["MOJ-407","MOTOR VENT.JEEP CHEROKEE 97-01","RACA AIR",4,[74.7,42.828],"MOTOR"],["MOK-101","MOTOR HYUNDAI KIA PLATO GRANDE","RACA AIR",11,[89.7,51.428000000000004],"MOTOR"],["MOM-102","MOTOR VENT.MAZDA 3 04-08","RACA AIR",20,[83.7,47.988],"MOTOR"],["MOM-411","MOTOR SOPLADOR MISUBISHI SIGNO","RACA AIR",6,[79.7,45.69466666666666],"MOTOR"],["MOM-412","MOTOR VENT.MITSU.LANCER TOURING 03-12","GLOBAL AC WIND",4,[79.7,45.69466666666666],"MOTOR"],["MOM-414","MOTOR VENT.HYUNDAI TUCSON 06-10/SONATA","RACA AIR",27,[79.7,45.69466666666666],"MOTOR"],["MOM-420","MOTOR VENT.KOMATSU/CANTER 24V","GLOBAL AC WIND",0,[89.7,51.428000000000004],"MOTOR"],["MOM-420","MOTOR VENT.KOMATSU/CANTER 24V","GLOBAL AC WIND",1,[94.7,54.294666666666664],"MOTOR"],["MOM-801","MOTOR VENT. MACK GRANITE 08-15","GLOBAL AC WIND",2,[109.7,62.89466666666667],"MOTOR"],["MON-802","MOTOR VENT.NISSAN/HYUNDAI/KIA/TOYOTA","",0,[54.7,31.361333333333334],"MOTOR"],["MON-802","MOTOR VENT.NISSAN/HYUNDAI/KIA/TOYOTA","GLOBAL AIR",6,[54.7,31.361333333333334],"MOTOR"],["MON-806","MOTOR VENT.NISSAN SENTRA B-16","GLOBAL AC WIND",2,[null,0],"MOTOR"],["MOR-504","MOTOR VENT. RENAULT TWINGO 96-15","GLOBAL AC WIND",0,[89.7,51.428000000000004],"MOTOR"],["MOR-504","MOTOR VENT. RENAULT TWINGO 96-15","GLOBAL AC WIND",0,[89.7,51.428000000000004],"MOTOR"],["MOR-504","MOTOR VENT. RENAULT TWINGO 96-15","GLOBAL",0,[93.7,53.721333333333334],"MOTOR"],["MOR-504","MOTOR VENT. RENAULT TWINGO 96-15","HAVILAND",20,[93.7,53.721333333333334],"MOTOR"],["MOR-504","MOTOR VENT. RENAULT TWINGO 96-15","GLOBAL AC WIND",15,[93.7,53.721333333333334],"MOTOR"],["MOR-505","MOTOR VENT.RENAULT LOGAN 06-12","",0,[98.7,56.587999999999994],"MOTOR"],["MOR-505","MOTOR VENT.RENAULT LOGAN 06-12","GLOBAL AC WIND",0,[92.7,53.148],"MOTOR"],["MOR-505","MOTOR VENT.RENAULT LOGAN 06-12","GLOBAL AIR",4,[92.7,53.148],"MOTOR"],["MOT-301","MOTOR VENT.TOYOTA YARIS/TERIOS 08-11","",0,[70.7,40.534666666666666],"MOTOR"],["MOT-301","MOTOR VENT.TOYOTA YARIS/TERIOS 08-11","RACA AIR",3,[70.7,40.534666666666666],"MOTOR"],["MOT-304","MOTOR VENT.TOYOTA COASTER 24V CON TURBIN","GLOBAL AC WIND",1,[59.7,34.228],"MOTOR"],["MOT-306","MOTOR TOYOTA SEQUOIA CON RESISTENCIA","GLOBAL AC WIND",2,[null,0],"MOTOR"],["MOT-309","MOTOR VENT.TOYOTA COROLLA 03-08","global air",0,[79.7,45.69466666666666],"MOTOR"],["MOT-309","MOTOR VENT.TOYOTA COROLLA 03-08","RACA AIR",4,[79.7,45.69466666666666],"MOTOR"],["MOT-310","MOTOR VENT.TOYOTA HILUX/FORTU 09 ORIG.","RACA AIR",4,[74.7,42.828],"MOTOR"],["MOT-312","MOTOR SOPLADOR TOYOTA TERIOS 02-07","GLOBAL AC WIND",0,[75.7,43.40133333333333],"MOTOR"],["MOT-312","MOTOR SOPLADOR TOYOTA TERIOS 02-07","RACA AIR",6,[75.7,43.40133333333333],"MOTOR"],["MOT-318","MOTOR SOPLADOR TOYOTA MACHITO 12-20","GLOBAL AC WIND",14,[88.7,50.85466666666667],"MOTOR"],["MOT-324","MOTOR VENT.TOYOTA COROLLA 98-02","",0,[66.7,38.24133333333334],"MOTOR"],["MOT-325","MOTOR VENT.TOYOTA HILUX 06-10","RACA AIR",1,[79.7,45.69466666666666],"MOTOR"],["MOT-325","MOTOR VENT.TOYOTA HILUX 06-10","RACA AIR",1,[78.7,45.12133333333333],"MOTOR"],["MOT-325","MOTOR VENT.TOYOTA HILUX 06-10","GLOBAL AC WIND",2,[78.7,45.12133333333333],"MOTOR"],["MOT-329","MOTOR VENT.TOYOTA 4RUNNER 96-02","RACA AIR",0,[78.7,45.12133333333333],"MOTOR"],["MOT-329","MOTOR VENT.TOYOTA 4RUNNER 96-02","GLOBAL AIR",2,[79.7,45.69466666666666],"MOTOR"],["MOT-330","MOTOR TOYOTA CAMRY/ BURBUJA 94-02","RACA AIR",1,[74.7,42.828],"MOTOR"],["RAK-805","RAD.KIA RIO STYLUS TM IMP","",0,[139.7,80.09466666666665],"RADIADOR"],["RAM-429","RAD.LANCER JT TOURING 05-09 TA","",1,[169.7,97.29466666666666],"RADIADOR"],["RAV-801","RAD.VW GOL/PARATI 06-09 TM","",0,[109.7,62.89466666666667],"RADIADOR"],["RAY-801","RAD.ZOTYE NOMADA AUT.11","",0,[148.7,85.25466666666667],"RADIADOR"],["RSF-102","","GLOBAL AIR",2,[97.7,56.01466666666667],"RESISTENCIA"],["RSF-105","","FORD",5,[71.7,41.108000000000004],"RESISTENCIA"],["RSF-109","RESISTENCIA FORD BRONCO/EXPLORER 98-01","",12,[21.7,12.441333333333333],"RESISTENCIA"],["RSF-109","RESISTENCIA FORD BRONCO/EXPLORER 98-01","",5,[21.7,12.441333333333333],"RESISTENCIA"],["RSF-113","RESISTENCIA FORD FUSION 06-09","",0,[54.7,31.361333333333334],"RESISTENCIA"],["RSF-113","RESISTENCIA FORD FUSION 06-09","GLOBAL AIR",14,[53.7,30.788000000000004],"RESISTENCIA"],["RSF-113","RESISTENCIA FORD FUSION 06-12","GLOBAL AIR",0,[53.7,30.788000000000004],"RESISTENCIA"],["RSG-212","RESIST.GM SILVERADO 01-06","GLOBAL AC WIND",0,[49.7,28.494666666666667],"RESISTENCIA"],["RSG-212","RESIST.GM SILVERADO 01-06","GLOBAL AC WIND",2,[50.7,29.068000000000005],"RESISTENCIA"],["RSG-212","RESIST.GM SILVERADO 01-06","GLOBAL AC WIND",20,[50.7,29.068000000000005],"RESISTENCIA"],["RSG-215","RESIST.GM OPTRA 05-12","GLOBAL AC WIND",0,[35.7,20.468],"RESISTENCIA"],["RSG-215","RESIST.GM OPTRA 05-12","GLOBAL AC WIND",0,[42.7,24.481333333333335],"RESISTENCIA"],["RSG-215","RESIST.GM OPTRA 05-12","GLOBAL AC WIND",2,[41.7,23.908],"RESISTENCIA"],["RSG-215","RESIST.GM OPTRA 05-12","GLOBAL AC WIND",10,[42.7,24.481333333333335],"RESISTENCIA"],["RSG-215","RESIST.GM OPTRA 05-12","GLOBAL AIR",15,[42.7,24.481333333333335],"RESISTENCIA"],["RSG-217","RESIST.GM LUV D-MAX 08","GLOBAL AIR",0,[26.7,15.308],"RESISTENCIA"],["RSG-217","RESIST.GM LUV D-MAX 08","GLOBAL AIR",5,[26.7,15.308],"RESISTENCIA"],["RSG-217","RESIST.GM LUV D-MAX 08","GLOBAL AC WIND",15,[26.7,15.308],"RESISTENCIA"],["RSG-218","RESISTENCIA CHEVROLET AVEO","GLOBAL AIR",7,[20.7,11.867999999999999],"RESISTENCIA"],["RSG-218","RESISTENCIA CHEVROLET AVEO","GLOBAL AIR",5,[20.7,11.867999999999999],"RESISTENCIA"],["RSG-219","RESISTENCIA CHEVROLET AVEO","GLOBAL AC WIND",3,[19.7,11.294666666666666],"RESISTENCIA"],["RSJ-401","RESIST.JEEP GRAND CHEROKEE 05-10/KK 12","GLOBAL AIR",1,[53.7,30.788000000000004],"RESISTENCIA"],["RSJ-403","RESIST.JEEP LIBERTY 02-07","GLOBAL AC WIND",0,[35.7,20.468],"RESISTENCIA"],["RSM-402","RESISTENCIA MITSUBISHI LANCER 02-06","GLOBAL AC WIND",4,[34.7,19.89466666666667],"RESISTENCIA"],["RSM-403","MODULO ELECTRO MITSUBISHI LANCER TOURING","GLOBAL AIR",5,[64.7,37.09466666666667],"MODULO ELECTRO"],["RST-305","RESISTENCIA TOYOTA COROLLA 05-09","GLOBAL AC WIND",1,[51.7,29.641333333333336],"RESISTENCIA"],["SWG-201","SWITCH LUV D MAX","GLOBAL AIR",0,[35.07,20.1068],"SWITCH"],["SWG-201","SWITCH LUV D MAX","AC PARTS",0,[35.07,20.1068],"SWITCH"],["SWG-201","SWITCH LUV D MAX","AC PARTS",70,[35.07,20.1068],"SWITCH"],["TEG-204","TERMISTOR LUV D MAX","GLOBAL AIR",2,[29.7,17.028],"TERMISTOR"],["TEG-204","TERMISTOR LUV D MAX 2012-2017","GLOBAL AIR",15,[24.7,14.161333333333332],"TERMISTOR"],["TEM-402","TERMOSTATO HYUNDAI ACCENT 06-12","GLOBAL AC WIND",4,[21.7,12.441333333333333],"TERMOSTATO"],["TES-908","TERMOSTATO PERILLA 32 PULGADAS","GLOBAL AC WIND",18,[11.7,6.708],"TERMOSTATO"],["TES-908","TERMOSTATO PERILLA 32 PULGADAS","GLOBAL AIR",25,[11.7,6.708],"TERMOSTATO"],["VAC-713","VALV.PRESOST.JEEP CHEROKEE 98/RAM GRIS ACPARTS CHINA","AC PARTS",0,[17.7,10.148],"PRESOSTATICA"],["VAC-713","VALV.PRESOST.JEEP CHEROKEE 98/RAM GRIS","ROY",2,[15.7,9.001333333333333],"PRESOSTATICA"],["VAC-713","VALV.PRESOST.JEEP CHEROKEE 98/RAM GRIS","GLOBAL AIR",22,[15.97,9.156133333333333],"PRESOSTATICA"],["VAC-716","VALVULA PRESOSTATI JEEP CHEROKEE ALTA 98","GLOBAL AC WIND",4,[15.07,8.640133333333333],"PRESOSTATICA"],["VAC-717","VALV.PRESOST.DODGE CALIBER/GRAND CHEROKEE","",5,[37.7,21.61466666666667],"PRESOSTATICA"],["VAC-717","VALV.PRESOST.DODGE CALIBER/GRAND CHEROKEE","CLIMAPARTS",4,[37.7,21.61466666666667],"PRESOSTATICA"],["VAD-200","VALVULA PRESOSTATICA DAEWOO CIELO","AC PARTS",5,[12.7,7.281333333333333],"PRESOSTATICA"],["VAD-201","VALVULA DE EXPANSION DAEWOO NUBIRA","GLOBAL AC WIND",0,[20.7,11.867999999999999],"V. EXPANSION"],["VAF-100","VALV.PRESOST.FORD ECO-SPORT/FIESTA ALTA","AC PARTS",0,[23.7,13.588],"PRESOSTATICA"],["VAF-100","VALV.PRESOST.FORD ECO-SPORT/FIESTA ALTA","GLOBAL AC WIND",5,[18.7,10.721333333333334],"PRESOSTATICA"],["VAF-100","VALV.PRESOST.FORD ECO-SPORT/FIESTA ALTA","GLOBAL AIR",24,[18.7,10.721333333333334],"PRESOSTATICA"],["VAF-101","VALV.PRESOST.FORD KA ALTA BLANCA","AC PARTS",0,[34.7,19.89466666666667],"PRESOSTATICA"],["VAF-101","VALV.PRESOST.FORD KA ALTA BLANCA","ACTECMAX",3,[34.7,19.89466666666667],"PRESOSTATICA"],["VAF-101","VALV.PRESOST.FORD KA ALTA BLANCA","AC PARTS",10,[34.7,19.89466666666667],"PRESOSTATICA"],["VAF-103","VALV.PRESOST.FORD R-12","",0,[7.07,4.053466666666667],"PRESOSTATICA"],["VAF-109","VALV. PRESOST FORD R134","RACA",2,[15.7,9.001333333333333],"PRESOSTATICA"],["VAF-109","VALV. PRESOST FORD R134","GLOBAL AC WIND",4,[15.7,9.001333333333333],"PRESOSTATICA"],["VAF-111","VALV.PRESOST.FORD EXPLORER 97-01 NEGRA ACPARTS CHINA","",0,[18.97,10.876133333333334],"PRESOSTATICA"],["VAF-111","VALV.PRESOST.FORD EXPLORER 97-01 NEGRA","ROY",0,[15.7,9.001333333333333],"PRESOSTATICA"],["VAF-111","VALV.PRESOST.FORD EXPLORER 97-01 NEGRA","GLOBAL AC WIND",15,[15.7,9.001333333333333],"PRESOSTATICA"],["VAF-111","VALV.PRESOST.FORD EXPLORER 97-01 NEGRA","GLOBAL AC WIND",20,[16.07,9.213466666666665],"PRESOSTATICA"],["VAF-111","VALV.PRESOST.FORD EXPLORER 97-01 NEGRA","AC PARTS",10,[16.07,9.213466666666665],"PRESOSTATICA"],["VAF-115","VALV. PRESOST.FORD FIESTA 97-08 BLANCA ACPARTS CHINA","AC PARTS",0,[18.7,10.721333333333334],"PRESOSTATICA"],["VAF-115","VALV. PRESOST.FORD FIESTA 97-08 BLANCA ACPARTS CHINA","AC PARTS",5,[18.7,10.721333333333334],"PRESOSTATICA"],["VAF-118","VALV.PRESOST.LASER/MAZDA/MATIZ","RACA",10,[15.7,9.001333333333333],"PRESOSTATICA"],["VAF-119","VALV.PRESOST.FORD EXPLORER 02-05 ALTA","",1,[29.7,17.028],"PRESOSTATICA"],["VAF-119","VALV.PRESOST.FORD EXPLORER 02-05 ALTA","GLOBAL AC WIND",6,[29.7,17.028],"PRESOSTATICA"],["VAF-121","VALV.BLOCK FORD EXPLORER 12-13","",0,[49.7,28.494666666666667],"V. EXPANSION"],["VAF-123","VALV.PRESOST.ALTA FORD EXPLORER 09-10 ALTA","GLOBAL AC WIND",3,[30.7,17.601333333333333],"PRESOSTATICA"],["VAF-123","VALV.PRESOST.ALTA FORD EXPLORER 09-10 ALTA","GLOBAL AC WIND",5,[30.7,17.601333333333333],"PRESOSTATICA"],["VAF-124","VALV.BLOCK F-250/350 SUPER DUTY 11-13","",1,[45.7,26.201333333333334],"V. EXPANSION"],["VAG-200","VALV.PRESOST.CORSA 01-03/MAZDA 3","ROY",26,[14.7,8.427999999999999],"PRESOSTATICA"],["VAG-201","VALV.PRESOST.GM BLAZER/CHEYENNE 134-A 95","",0,[9.7,5.561333333333333],"PRESOSTATICA"],["VAG-202","VALV.PRESOST.GM R-12","",0,[7.07,4.053466666666667],"PRESOSTATICA"],["VAG-206","VALV.BLOCK GM AVEO 05-12","",0,[28.7,16.454666666666665],"V. EXPANSION"],["VAG-207","VALV.PRESOST.GM CORSA 98/DONG FENG S30","ROY",9,[15.7,9.001333333333333],"PRESOSTATICA"],["VAG-211","VALV.PRESOST.GM R-134A","",0,[7.07,4.053466666666667],"PRESOSTATICA"],["VAG-212","VALVULA BLOCK MERIVA","GLOBAL AC WIND",4,[26.7,15.308],"PRESOSTATICA"],["VAG-212","VALVULA BLOCK MERIVA","GLOBAL AC WIND",2,[26.7,15.308],"PRESOSTATICA"],["VAG-213","VALV.BLOCK GM OPTRA/SPARK","",0,[28.7,16.454666666666665],"V.EXPANSION"],["VAG-213","VALV.BLOCK GM OPTRA/SPARK","GLOBAL AC WIND",2,[35.7,20.468],"V.EXPANSION"],["VAG-214","VALV.PRESOST.ALTA AVEO/OPTRA/CRUZE","",0,[25.7,14.734666666666666],"PRESOSTATICA"],["VAG-214","VALV.PRESOST.ALTA AVEO/OPTRA/CRUZE","GLOBAL AIR",24,[25.7,14.734666666666666],"PRESOSTATICA"],["VAG-217","VALV.PRESOST.TOYOTA TERIOS 02-12/SIGNO","ROY",5,[13.7,7.854666666666666],"PRESOSTATICA"],["VAG-217","VALV.PRESOST.TOYOTA TERIOS 02-12/SIGNO","GLOBAL AC WIND",3,[15.7,9.001333333333333],"PRESOSTATICA"],["VAG-219","VALV.CONTROL V5 POA","GLOBAL AC WIND",0,[17.27,9.901466666666666],"V.POA"],["VAG-219","VALV.CONTROL V5 POA","GLOBAL AIR",0,[17.27,9.901466666666666],"V.POA"],["VAG-219","VALV.CONTROL V5 POA","GLOBAL AC WIND",1,[17.37,9.9588],"V.POA"],["VAG-219","VALV.CONTROL V5 POA","",10,[17.37,9.9588],"V.POA"],["VAG-225","VALV.PRESOST.GM TRAILBLAZER/AVALANCHE","",0,[13.97,8.009466666666668],"PRESOSTATICA"],["VAG-225","VALV.PRESOST.GM TRAILBLAZER/AVALANCHE","RACA AIR",1,[13.97,8.009466666666668],"PRESOSTATICA"],["VAG-225","VALV.PRESOST.GM TRAILBLAZER/AVALANCHE","GLOBAL AC WIND",11,[13.97,8.009466666666668],"PRESOSTATICA"],["VAG-225","VALV.PRESOST.GM TRAILBLAZER/AVALANCHE","GLOBAL AC WIND",26,[13.97,8.009466666666668],"PRESOSTATICA"],["VAG-227","VALV.BLOCK GM D-MAX/NISSAN SENTRA/MURANO","",0,[36.7,21.041333333333334],"V. EXPANSION"],["VAH-602","VALV.EXP.CIVIC/ACCORD R-134A","GLOBAL AC WIND",7,[28.7,16.454666666666665],"V. EXPANSION"],["VAH-604","VALV.PRESOST.HONDA CIVIC/ACCORD 96-05","ROY",0,[12.7,7.281333333333333],"PRESOSTATICA"],["VAH-604","VALV.PRESOST.HONDA CIVIC/ACCORD 96-05","GLOBAL AC WIND",4,[13.7,7.854666666666666],"PRESOSTATICA"],["VAH-604","VALV.PRESOST.HONDA CIVIC/ACCORD 96-05","GLOBAL AC WIND",10,[13.7,7.854666666666666],"PRESOSTATICA"],["VAI-603","VALV.PRESOST.FIAT PALIO 98","",0,[9.7,5.561333333333333],"PRESOSTATICA"],["VAI-604","VALV.PRESOST.FIAT PALIO/SIENA FIRE","",0,[19.7,11.294666666666666],"PRESOSTATICA"],["VAI-604","VALV.PRESOST.FIAT PALIO/SIENA FIRE","CLIMAPARTS",1,[19.7,11.294666666666666],"PRESOSTATICA"],["VAI-604","VALV.PRESOST.FIAT PALIO/SIENA FIRE","HAVILAND",5,[19.7,11.294666666666666],"PRESOSTATICA"],["VAI-606","VALV. EXPANSION FIAT PALIO/ SIENA FIRE","GLOBAL AC WIND",0,[29.7,17.028],"V.EXPANSION"],["VAI-606","VALV. EXPANSION FIAT PALIO/ SIENA FIRE","GLOBAL AC WIND",2,[30.7,17.601333333333333],"V.EXPANSION"],["VAJ-403","VALV.BLOCK JEEP CHEROKEE 08-12","GLOBAL AC WIND",1,[null,0],"V.EXPANSION"],["VAM-101","VALV.BLOCK MAZDA 3 04-06","GLOBAL AC WIND",5,[22.7,13.014666666666667],"V.EXPANSION"],["VAM-101","VALV.BLOCK MAZDA 3 04-06","GLOBAL AC WIND",7,[25.7,14.734666666666666],"V.EXPANSION"],["VAM-403","VALVULA PRESOSTATICA MITSUBISHI LANCER R134","GLOBAL AC WIND",4,[17.7,10.148],"PRESOSTATICA"],["VAM-407","VALV.BLOCK HYUNDAI ACCENT 97-99","",1,[30.7,17.601333333333333],"V.EXPANSION"],["VAM-408","VALV.BLOCK MITSUBISHI LANCER 02-12","",0,[29.7,17.028],"V.EXPANSION"],["VAM-415","VALV.BLOCK HYUNDAI GETZ 06-11","",0,[35.7,20.468],"V.EXPANSION"],["VAM-419","VALV.PRESOST.HYUNDAI H1/TUCSON 05-07 ACPARTS CHINA","",0,[18.7,10.721333333333334],"PRESOSTATICA"],["VAM-419","VALV.PRESOST.HYUNDAI H1/TUCSON 05-07 ACPARTS CHINA","AC PARTS",0,[19.7,11.294666666666666],"PRESOSTATICA"],["VAN-803","VALV.PRESOST.NISSAN ALMERA/LANCER TOURI","",0,[27.7,15.881333333333332],"PRESOSTATICA"],["VAN-803","VALV.PRESOST.NISSAN ALMERA/LANCER TOURI","CLIMAPARTS",1,[null,0],"PRESOSTATICA"],["VAN-803","VALV.PRESOST.NISSAN ALMERA/LANCER TOURI","GLOBAL AIR",2,[28.7,16.454666666666665],"PRESOSTATICA"],["VAN-803","VALV.PRESOST.NISSAN ALMERA/LANCER TOURI","GLOBAL AC WIND",10,[28.7,16.454666666666665],"PRESOSTATICA"],["VAN-805","VALV.PRESOST.NISSAN SENTRA 98-02","",0,[55.7,31.934666666666665],"PRESOSTATICA"],["VAR-505","VALV.BLOCK RENAULT MEGANE/CLIO/TWINGO/SY","",0,[28.7,16.454666666666665],"V.EXPANSION"],["VAT-312","VALV.PRESOST.TOYOTA R134A OFF/OFF/OFF RF","",4,[12.7,7.281333333333333],"PRESOSTATICA"],["VAT-313","VALV.PRESOST.TOYOTA R-134A OFF/ON/OFF RG","RACA AIR",0,[11.7,6.708],"PRESOSTATICA"],["VAT-313","VALV.PRESOST.TOYOTA R-134A OFF/ON/OFF RG","AC PARTS",3,[11.97,6.8628],"PRESOSTATICA"],["VAT-314","VALV.EXP.TOYOTA 16mm","",0,[19.7,11.294666666666666],"V.EXPANSION"],["VAT-314","VALV.EXP.TOYOTA 16mm","ATC",7,[22.7,13.014666666666667],"V.EXPANSION"],["VAT-314","VALV.EXP.TOYOTA 16mm","GLOBAL AC WIND",0,[23.7,13.588],"V.EXPANSION"],["VAT-314","VALV.EXP.TOYOTA 16mm","AC PARTS",4,[23.97,13.742799999999999],"V.EXPANSION"],["VAT-314","VALV.EXP.TOYOTA 16mm","RUIZAR",6,[23.97,13.742799999999999],"V.EXPANSION"],["VAT-316","VALV.BLOCK TOYOTA YARIS/HILUX 06-08","",0,[50.7,29.068000000000005],"V.EXPANSION"],["VAT-316","VALV.BLOCK TOYOTA YARIS/HILUX 06-08","",10,[37.7,21.61466666666667],"V.EXPANSION"],["VAT-329","VALV.PRESOST.TOY. R-134A OFF/OFF/OFF RG","",0,[13.7,7.854666666666666],"PRESOSTATICA"],["VAT-329","VALV.PRESOST.TOYOTA R134A OFF/OFF/OFF RF","RACA AIR",8,[13.7,7.854666666666666],"PRESOSTATICA"],["VAV-805","VALV.BLOCK VW FOX/SPACEFOX 07-10","",0,[33.7,19.321333333333335],"V.EXPANSION"],["VAV-808","VALV. PRESOST. VW FOX 05-08","",1,[36.7,21.041333333333334],"PRESOSTATICA"],["VAV-808","VALV. PRESOST. VW FOX 05-08","GLOBAL AC WIND",5,[36.7,21.041333333333334],"PRESOSTATICA"],["VAY-803","VALV.PRESOST.CENTAURO 08-04","AC PARTS",0,[21.7,12.441333333333333],"PRESOSTATICA"],["VAY-803","VALV.PRESOST.CENTAURO 08-04","ACTECMAX",10,[18.97,10.876133333333334],"PRESOSTATICA"],["VAY-805","VALV.PRESOST.DONGFENG S30\r\nVALV.PRESOST.DONGFENG S30","GLOBAL AC WIND",68,[15.7,9.001333333333333],"PRESOSTATICA"],["%","","","%",[null,null],"CALCULO"],["0.55","","",0.4,[null,null],"DEVALUACIÓN"],["0.25","","",0.2,[null,null],"GANANCIA"],["0.02","","",0.02,[null,null],"GASTOS"],["0.14","","",0,[null,null],"MERCADO LIBRE"],["0.02","","",0.02,[null,null],"VENDEDORES"],["0.43000000000000005","","",0.24,[null,null],"CALCULO TOTAL"],["%","","","%",[null,null],"CALCULO"],["0.7","","",0.5,[null,null],"DEVALUACIÓN"],["0.05","","",0.05,[null,null],"GANANCIA"],["0.02","","",0.02,[null,null],"GASTOS"],["0.12","","",0,[null,null],"MERCADO LIBRE"],["0.02","","",0.02,[null,null],"VENDEDORES"],["0.21","","",0.09000000000000001,[null,null],"CALCULO TOTAL"],["CALCULO AIRCA","","",null,[null,null],""],["1","100% CALCULO TOTAL","","100% CALCULO TOTAL",[null,null],"CALCULO TOTAL"],["0.8","80% PAGO A IRAN","","83.33% PRECIO DE AIRCA + 16.67% DEVALUACIÓN",[null,null],"PAGO A IRAN"],["0.12","20% DESCONTADOS DEL PRECIO","",null,[null,null],"MERCADO LIBRE"],["0.02","","",null,[null,null],"VENDEDORES"],["0.059999999999999956","","",null,[null,null],"GANANCIA"]]}</script>
+<script id="app">
+(function(){
+"use strict";
+var APP_SRC = document.currentScript.textContent;
+var PAGE = 60;
+
+// Montar la interfaz desde la plantilla
+document.body.appendChild(document.getElementById("body-src").content.cloneNode(true));
+
+var state = {
+  rows: [], rawRows: [], headers: [], headerRow: 0,
+  map: null,       // {code, desc, brand, stock, prices:[{idx,label}]}
+  items: [],       // {code, desc, brand, stock, prices:[{label,val}], _s}
+  fileName: "", loadedAt: null, workbook: null, shown: PAGE,
+  canWrite: false, artifactApi: null,
+  selGroups: []     // grupos seleccionados; vacío = todos
+};
+
+var $ = function(id){ return document.getElementById(id); };
+var loader=$("loader"), fileInput=$("fileInput"), loadMsg=$("loadMsg"),
+    mapping=$("mapping"), searchArea=$("searchArea"), q=$("q"),
+    results=$("results"), resCount=$("resCount"), dataInfo=$("dataInfo"),
+    searchBox=$("searchBox"), pubMsg=$("pubMsg"), noData=$("noData");
+
+/* ---------- utilidades ---------- */
+function norm(s){
+  return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function toNum(v){
+  if(v == null || v === "") return NaN;
+  return typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.,-]/g,"").replace(",","."));
+}
+function fmtPrice(v){
+  if(v == null || v === "") return "—";
+  var n = toNum(v);
+  if(isNaN(n)) return esc(String(v));
+  return "$" + n.toLocaleString("es-VE",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtStock(v){
+  if(v == null || v === "") return {txt:"—", cls:""};
+  var n = toNum(v);
+  if(isNaN(n)) return {txt:esc(String(v)), cls:""};
+  var cls = n <= 0 ? "stock-out" : (n <= 3 ? "stock-low" : "stock-ok");
+  return {txt:n.toLocaleString("es-VE"), cls:cls};
+}
+
+/* ---------- grupos que no son productos (filas de cálculo del Excel) ---------- */
+var EXCLUDED_GROUPS = ["calculo","devaluacion","ganancia","gasto","pago","vendedores"];
+function isExcludedGroup(g){
+  var n = norm(g);
+  if(!n) return false;
+  for(var i=0;i<EXCLUDED_GROUPS.length;i++){ if(n.indexOf(EXCLUDED_GROUPS[i])!==-1) return true; }
+  return false;
+}
+
+/* ---------- datos embebidos en la página ---------- */
+function readEmbedded(){
+  try{
+    var raw = document.getElementById("inv-data").textContent;
+    var d = JSON.parse(raw);
+    if(!d || !d.items || !d.items.length) return false;
+    var labels = d.labels || [];
+    state.items = d.items.map(function(r){
+      var code=r[0]||"", desc=r[1]||"", brand=r[2]||"", stock=r[3], pv=r[4]||[], group=r[5]||"";
+      return {code:code, desc:desc, brand:brand, stock:stock, group:group,
+        prices: labels.map(function(l,i){ return {label:l, val:pv[i]}; }),
+        _s: norm(code)+" "+norm(desc)+" "+norm(brand)+" "+norm(group)};
+    }).filter(function(it){ return !isExcludedGroup(it.group); });
+    state.map = {code:0, desc:1, brand:2, stock: d.hasStock ? 3 : -1, group: d.hasGroup ? 5 : -1,
+                 prices: labels.map(function(l,i){return {idx:i,label:l};})};
+    state.fileName = d.fileName || "inventario";
+    state.loadedAt = d.loadedAt ? new Date(d.loadedAt) : null;
+    return true;
+  }catch(e){ return false; }
+}
+
+function serializeData(){
+  var labels = state.map.prices.map(function(p){ return p.label; });
+  return {
+    labels: labels,
+    hasStock: state.map.stock >= 0,
+    hasGroup: state.map.group >= 0,
+    fileName: state.fileName,
+    loadedAt: state.loadedAt ? state.loadedAt.toISOString() : null,
+    items: state.items.map(function(it){
+      return [it.code, it.desc, it.brand, it.stock == null ? null : it.stock,
+              it.prices.map(function(p){ return p.val == null ? null : p.val; }),
+              it.group || ""];
+    })
+  };
+}
+
+// Reconstruye la página completa (misma estructura con la que fue escrita) con los datos nuevos
+function buildPage(data){
+  var json = JSON.stringify(data).replace(/<\//g, "<\\/");
+  var css = document.getElementById("css").textContent;
+  var body = document.getElementById("body-src").innerHTML;
+  return '<!DOCTYPE html>\n<html lang="es">\n<head>\n'
+    + '<meta charset="UTF-8">\n'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+    + '<title>Buscador de inventario</title>\n'
+    + '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    + '<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">\n'
+    + '<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>\n'
+    + '<style id="css">' + css + '</style>\n'
+    + '</head>\n<body>\n'
+    + '<template id="body-src">' + body + '</template>\n'
+    + '<script id="inv-data" type="application/json">' + json + '<\/script>\n'
+    + '<script id="app">' + APP_SRC + '<\/script>\n'
+    + '</body>\n</html>\n';
+}
+
+/* ---------- carga de archivo ---------- */
+function openPicker(){ fileInput.click(); }
+loader.addEventListener("click", openPicker);
+loader.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){e.preventDefault();openPicker();} });
+["dragover","dragenter"].forEach(function(ev){
+  loader.addEventListener(ev,function(e){e.preventDefault();loader.classList.add("drag");});
+});
+["dragleave","drop"].forEach(function(ev){
+  loader.addEventListener(ev,function(e){e.preventDefault();loader.classList.remove("drag");});
+});
+loader.addEventListener("drop",function(e){
+  var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f) readFile(f);
+});
+fileInput.addEventListener("change",function(){
+  if(fileInput.files[0]) readFile(fileInput.files[0]);
+  fileInput.value = "";
+});
+
+function readFile(file){
+  loadMsg.textContent = "";
+  if(typeof XLSX === "undefined"){
+    loadMsg.textContent = "No se pudo cargar el lector de Excel. Revisa tu conexión y recarga la página.";
+    return;
+  }
+  var reader = new FileReader();
+  reader.onerror = function(){ loadMsg.textContent = "No se pudo leer el archivo. Intenta de nuevo."; };
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, {type:"array"});
+      state.workbook = wb;
+      state.fileName = file.name;
+      state.loadedAt = new Date();
+      setupSheetSelect(wb);
+      useSheet(wb.SheetNames[0]);
+    }catch(err){
+      loadMsg.textContent = "El archivo no se pudo interpretar como hoja de cálculo. Verifica que sea .xlsx, .xls o .csv.";
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setupSheetSelect(wb){
+  var row = $("sheetRow"), sel = $("selSheet");
+  if(wb.SheetNames.length > 1){
+    sel.innerHTML = wb.SheetNames.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+"</option>";}).join("");
+    row.style.display = "";
+    sel.onchange = function(){ useSheet(sel.value); };
+  } else {
+    row.style.display = "none";
+  }
+}
+
+function useSheet(name, headerRow){
+  var ws = state.workbook.Sheets[name];
+  var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  state.rawRows = rows;
+  var hIdx;
+  if(typeof headerRow === "number"){
+    hIdx = headerRow;
+  } else {
+    // fila de encabezado: entre las primeras 10, la que tenga más celdas de texto
+    hIdx = 0; var best = -1;
+    for(var i=0;i<Math.min(rows.length,10);i++){
+      var textCells = (rows[i]||[]).filter(function(c){return typeof c==="string" && c.trim()!=="";}).length;
+      if(textCells > best){ best = textCells; hIdx = i; }
+    }
+  }
+  state.headerRow = hIdx;
+  state.headers = (rows[hIdx]||[]).map(function(h,i){ return h==null||String(h).trim()==="" ? "Columna "+(i+1) : String(h).trim(); });
+  state.rows = rows.slice(hIdx+1).filter(function(r){
+    return r && r.some(function(c){ return c!=null && String(c).trim()!==""; });
+  });
+  buildHeaderSelect(rows, hIdx, name);
+  buildMapping();
+}
+
+function buildHeaderSelect(rows, hIdx, sheetName){
+  var sel = $("selHeader");
+  var n = Math.min(rows.length, 10);
+  var opts = [];
+  for(var i=0;i<n;i++){
+    var preview = (rows[i]||[]).filter(function(c){return c!=null && String(c).trim()!=="";})
+                  .slice(0,4).map(function(c){return String(c).trim();}).join(" | ");
+    if(preview.length > 60) preview = preview.substr(0,60) + "…";
+    opts.push('<option value="'+i+'">Fila '+(i+1)+(preview ? ": "+esc(preview) : " (vacía)")+"</option>");
+  }
+  sel.innerHTML = opts.join("");
+  sel.value = hIdx;
+  sel.onchange = function(){ useSheet(sheetName, parseInt(sel.value,10)); };
+}
+
+/* ---------- deteccion y mapeo de columnas ---------- */
+function detect(patterns){
+  for(var i=0;i<state.headers.length;i++){
+    var h = norm(state.headers[i]);
+    for(var p=0;p<patterns.length;p++){
+      if(h.indexOf(patterns[p]) !== -1) return i;
+    }
+  }
+  return -1;
+}
+function detectAll(patterns, excludeIdx, excludePatterns){
+  var out = [];
+  for(var i=0;i<state.headers.length;i++){
+    if(excludeIdx.indexOf(i)!==-1) continue;
+    var h = norm(state.headers[i]);
+    var skip = false;
+    for(var x=0;x<(excludePatterns||[]).length;x++){
+      if(h.indexOf(excludePatterns[x]) !== -1){ skip = true; break; }
+    }
+    if(skip) continue;
+    for(var p=0;p<patterns.length;p++){
+      if(h.indexOf(patterns[p]) !== -1){ out.push(i); break; }
+    }
+  }
+  return out;
+}
+
+function buildMapping(){
+  var codeIdx  = detect(["codigo","cod.","sku","referencia","ref","item","articulo nro","numero de parte","n\u00b0 parte","part"]);
+  var descIdx  = detect(["descripcion","descrip","producto","nombre","detalle","articulo"]);
+  var brandIdx = detect(["marca","brand","fabricante","proveedor"]);
+  var groupIdx = detect(["grupo","categoria","familia","linea","rubro","clase"]);
+  var stockIdx = detect(["existencia","exist","stock","cantidad","cant","disponible","inventario","unidades"]);
+  var priceIdxs = detectAll(["precio","pvp","venta","detal","mayor","mercado","mostrador","tienda","usd","price","$"],[codeIdx,descIdx,brandIdx,groupIdx,stockIdx],["costo","cost","total"]);
+
+  var optHtml = '<option value="-1">— (ninguna)</option>' + state.headers.map(function(h,i){
+    return '<option value="'+i+'">'+esc(h)+"</option>";
+  }).join("");
+  $("selCode").innerHTML = optHtml;  $("selCode").value  = codeIdx;
+  $("selDesc").innerHTML = optHtml;  $("selDesc").value  = descIdx;
+  $("selBrand").innerHTML = optHtml; $("selBrand").value = brandIdx;
+  $("selGroup").innerHTML = optHtml; $("selGroup").value = groupIdx;
+  $("selStock").innerHTML = optHtml; $("selStock").value = stockIdx;
+
+  var chips = $("priceChips");
+  chips.innerHTML = state.headers.map(function(h,i){
+    var on = priceIdxs.indexOf(i)!==-1;
+    return '<span class="chip'+(on?" on":"")+'" data-i="'+i+'" role="checkbox" aria-checked="'+on+'" tabindex="0">'+esc(h)+"</span>";
+  }).join("");
+  Array.prototype.forEach.call(chips.children,function(ch){
+    function toggle(){ ch.classList.toggle("on"); ch.setAttribute("aria-checked", ch.classList.contains("on")); }
+    ch.addEventListener("click",toggle);
+    ch.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();} });
+  });
+
+  pubMsg.textContent = ""; pubMsg.classList.remove("err");
+  $("btnConfirm").disabled = false;
+  loader.classList.add("hidden");
+  searchArea.classList.add("hidden");
+  noData.classList.add("hidden");
+  mapping.classList.remove("hidden");
+}
+
+$("btnCancelMap").addEventListener("click",function(){
+  mapping.classList.add("hidden");
+  loader.classList.remove("hidden");
+});
+
+$("btnConfirm").addEventListener("click",function(){
+  var code = parseInt($("selCode").value,10);
+  var desc = parseInt($("selDesc").value,10);
+  var brand = parseInt($("selBrand").value,10);
+  var group = parseInt($("selGroup").value,10);
+  var stock = parseInt($("selStock").value,10);
+  var prices = [];
+  Array.prototype.forEach.call($("priceChips").children,function(ch){
+    if(ch.classList.contains("on")){
+      var i = parseInt(ch.getAttribute("data-i"),10);
+      prices.push({idx:i, label:state.headers[i]});
+    }
+  });
+  state.map = {code:code, desc:desc, brand:brand, group:group, stock:stock, prices:prices};
+  buildItems();
+  publishNow();
+});
+
+function publishNow(){
+  var btn = $("btnConfirm");
+  var api = state.artifactApi;
+  if(!api){
+    // Fuera de Claude: generar el archivo HTML actualizado para descargarlo y subirlo/enviarlo
+    var html = buildPage(serializeData());
+    showSearch();
+    offerDownload(html);
+    return;
+  }
+  btn.disabled = true;
+  pubMsg.classList.remove("err");
+  pubMsg.textContent = "Publicando " + state.items.length.toLocaleString("es-VE") + " artículos para el equipo…";
+  var html = buildPage(serializeData());
+  api.publish(html).then(function(){
+    pubMsg.textContent = "Publicado. Actualizando…";
+    // La página se recarga sola con la nueva versión.
+  }).catch(function(err){
+    var code = err && err.code;
+    btn.disabled = false;
+    pubMsg.classList.add("err");
+    if(code === "conflict"){
+      pubMsg.textContent = "Alguien publicó una versión nueva hace un momento. La página se actualizará; vuelve a cargar tu archivo si aún hace falta.";
+    } else if(code === "not_writer" || code === "not_granted" || code === "not_declared"){
+      pubMsg.textContent = "Esta vista es de solo lectura: no se puede publicar desde aquí. Los datos quedan disponibles solo en esta sesión.";
+      state.canWrite = false;
+      showSearch();
+    } else if(code === "too_large"){
+      pubMsg.textContent = "El inventario es demasiado grande para publicarlo en la página. Prueba quitando columnas o filas que no necesites.";
+    } else if(code === "rate_limited"){
+      pubMsg.textContent = "Se publicó demasiadas veces seguidas. Espera un momento e intenta de nuevo.";
+    } else {
+      pubMsg.textContent = "No se pudo publicar (" + (code || "error") + "). Intenta de nuevo en unos segundos.";
+    }
+  });
+}
+
+function offerDownload(html){
+  var box = $("dlNotice");
+  var blob = new Blob([html], {type:"text/html;charset=utf-8"});
+  var url = URL.createObjectURL(blob);
+  var n = state.items.length.toLocaleString("es-VE");
+  box.innerHTML = "<strong>Página actualizada lista</strong> con " + n + " artículos. "
+    + "Descárgala y reemplaza la anterior donde la tengas alojada, o envíala al equipo. "
+    + "Mientras tanto ya puedes buscar aquí abajo.<br>"
+    + '<a class="btn" id="dlLink" href="'+url+'" download="buscador-inventario.html">Descargar buscador-inventario.html</a> '
+    + '<button class="btn ghost" id="dlClose" type="button">Cerrar</button>';
+  box.classList.remove("hidden");
+  $("dlClose").addEventListener("click",function(){ box.classList.add("hidden"); URL.revokeObjectURL(url); });
+  var wrap = document.querySelector(".wrap");
+  wrap.insertBefore(box, searchArea);
+}
+
+/* ---------- normalizar items ---------- */
+function buildItems(){
+  var m = state.map;
+  state.items = state.rows.map(function(r){
+    var code = m.code>=0 ? r[m.code] : "";
+    var desc = m.desc>=0 ? r[m.desc] : "";
+    var brand = (m.brand!=null && m.brand>=0) ? r[m.brand] : "";
+    var group = (m.group!=null && m.group>=0) ? r[m.group] : "";
+    var stock = m.stock>=0 ? r[m.stock] : null;
+    var prices = m.prices.map(function(p){ return {label:p.label, val:r[p.idx]}; });
+    return {
+      code: code==null?"":String(code).trim(),
+      desc: desc==null?"":String(desc).trim(),
+      brand: brand==null?"":String(brand).trim(),
+      group: group==null?"":String(group).trim(),
+      stock: stock,
+      prices: prices,
+      _s: norm(code) + " " + norm(desc) + " " + norm(brand) + " " + norm(group)
+    };
+  }).filter(function(it){ return (it.code !== "" || it.desc !== "") && !isExcludedGroup(it.group); });
+}
+
+/* ---------- busqueda ---------- */
+function tokens(str){
+  return norm(str).split(/\s+/).filter(function(t){return t!=="";});
+}
+function inStock(it){
+  if(state.map.stock < 0) return true;
+  var n = toNum(it.stock);
+  return !isNaN(n) && n > 0;
+}
+function stockItems(){
+  return $("chkOut").checked ? state.items : state.items.filter(inStock);
+}
+// nombres para mostrar (clave = nombre normalizado, sin espacios alrededor de puntos)
+var GROUP_NAMES = {
+  "v.expansion": "VALVULA DE EXPANSION",
+  "v.poa": "VALVULA POA"
+};
+function gkey(g){
+  return norm(g).replace(/\s*\.\s*/g,".").replace(/\s+/g," ").trim();
+}
+function inSelectedGroup(it){
+  if(state.selGroups.length===0) return true;
+  return state.selGroups.indexOf(gkey(it.group)) !== -1;
+}
+function visibleItems(){
+  return stockItems().filter(inSelectedGroup);
+}
+function hasGroups(){ return state.map && state.map.group >= 0; }
+function renderGroups(){
+  var box = $("groups");
+  if(!hasGroups()){ box.classList.add("hidden"); return; }
+  // contar por grupo entre los artículos (con o sin agotados, según el interruptor)
+  var counts = {}, names = {}, nameVotes = {};
+  stockItems().forEach(function(it){
+    var k = gkey(it.group);
+    if(!counts[k]){ counts[k]=0; nameVotes[k] = {}; }
+    counts[k]++;
+    var label = it.group || "Sin grupo";
+    nameVotes[k][label] = (nameVotes[k][label]||0) + 1;
+  });
+  // el nombre mostrado es la variante más frecuente en el Excel
+  Object.keys(nameVotes).forEach(function(k){
+    var best = "", bestN = -1;
+    Object.keys(nameVotes[k]).forEach(function(l){ if(nameVotes[k][l] > bestN){ bestN = nameVotes[k][l]; best = l; } });
+    names[k] = GROUP_NAMES[k] || best;
+  });
+  var keys = Object.keys(counts).sort(function(a,b){ return names[a].localeCompare(names[b],"es"); });
+  if(keys.length===0){ box.classList.add("hidden"); return; }
+  var allOn = state.selGroups.length===0;
+  var html = '<button type="button" class="gchip all'+(allOn?" on":"")+'" data-g="" aria-pressed="'+allOn+'">'
+    + '<span class="box">'+(allOn?"✓":"")+'</span><span class="name">Todos los grupos</span>'
+    + '<span class="n">'+stockItems().length.toLocaleString("es-VE")+"</span></button>";
+  html += keys.map(function(k){
+    var on = state.selGroups.indexOf(k)!==-1;
+    return '<button type="button" class="gchip'+(on?" on":"")+'" data-g="'+esc(k)+'" aria-pressed="'+on+'">'
+      + '<span class="box">'+(on?"✓":"")+'</span><span class="name">'+esc(names[k])+'</span>'
+      + '<span class="n">'+counts[k].toLocaleString("es-VE")+"</span></button>";
+  }).join("");
+  box.innerHTML = html;
+  box.classList.remove("hidden");
+  Array.prototype.forEach.call(box.children,function(b){
+    b.addEventListener("click",function(){
+      var g = b.getAttribute("data-g");
+      if(g===""){ state.selGroups = []; }
+      else {
+        var i = state.selGroups.indexOf(g);
+        if(i===-1) state.selGroups.push(g); else state.selGroups.splice(i,1);
+      }
+      state.shown = PAGE;
+      render();
+    });
+  });
+}
+function search(query){
+  var tk = tokens(query);
+  var base = visibleItems();
+  if(tk.length===0) return base;
+  return base.filter(function(it){
+    for(var i=0;i<tk.length;i++){
+      if(it._s.indexOf(tk[i]) === -1) return false;
+    }
+    return true;
+  });
+}
+function highlight(text, tk){
+  var safe = esc(text);
+  if(tk.length===0) return safe;
+  var plain = text, out = "", i = 0;
+  var np = norm(plain);
+  while(i < plain.length){
+    var matched = 0;
+    for(var t=0;t<tk.length;t++){
+      if(np.substr(i, tk[t].length) === tk[t]){ matched = tk[t].length; break; }
+    }
+    if(matched){
+      out += "<mark>" + esc(plain.substr(i,matched)) + "</mark>";
+      i += matched;
+    } else {
+      out += esc(plain.charAt(i));
+      i++;
+    }
+  }
+  return out;
+}
+
+function groupByCode(list){
+  var groups = [], byCode = {};
+  list.forEach(function(it){
+    var key = norm(it.code);
+    if(key === ""){ groups.push({code:it.code, desc:it.desc, variants:[it]}); return; }
+    if(byCode[key]){ byCode[key].variants.push(it); }
+    else { byCode[key] = {code:it.code, desc:it.desc, variants:[it]}; groups.push(byCode[key]); }
+  });
+  return groups;
+}
+function sumStock(variants){
+  var total = 0, any = false;
+  variants.forEach(function(v){
+    var n = toNum(v.stock);
+    if(!isNaN(n)){ total += n; any = true; }
+  });
+  return any ? total : null;
+}
+function avgPrices(variants){
+  var acc = {}, order = [];
+  variants.forEach(function(v){
+    v.prices.forEach(function(p){
+      var n = toNum(p.val);
+      if(isNaN(n) || n <= 0) return;
+      if(!acc[p.label]){ acc[p.label] = {sum:0,count:0}; order.push(p.label); }
+      acc[p.label].sum += n; acc[p.label].count++;
+    });
+  });
+  return order.map(function(label){
+    return {label:label, avg: acc[label].sum / acc[label].count, count: acc[label].count};
+  });
+}
+
+function render(){
+  var query = q.value;
+  var tk = tokens(query);
+  var found = search(query);
+  var groups = groupByCode(found);
+  var total = groups.length;
+  var slice = groups.slice(0, state.shown);
+  var hasStock = state.map.stock>=0;
+  renderGroups();
+
+  if(state.items.length===0){
+    results.innerHTML = '<div class="empty">El archivo no tiene filas con datos en las columnas elegidas.</div>';
+    resCount.textContent = "";
+    return;
+  }
+  if(total===0){
+    var hiddenHits = $("chkOut").checked ? 0 : state.items.filter(function(it){
+      if(inStock(it) || !inSelectedGroup(it)) return false;
+      for(var i=0;i<tk.length;i++){ if(it._s.indexOf(tk[i])===-1) return false; }
+      return true;
+    }).length;
+    var scope = state.selGroups.length ? " en " + (state.selGroups.length===1 ? "el grupo seleccionado" : "los grupos seleccionados") : "";
+    results.innerHTML = '<div class="empty">Sin resultados con existencia' + scope + (tk.length ? ' para «'+esc(query)+'»' : '') + '.'
+      + (hiddenHits ? "<br>Hay "+hiddenHits+(hiddenHits===1?" artículo agotado":" artículos agotados")+" con esa búsqueda; activa «Mostrar agotados» para verlos." : "<br>Prueba con menos palabras o revisa el código.")
+      + "</div>";
+    resCount.textContent = "0 resultados";
+    return;
+  }
+
+  var vis = visibleItems();
+  var hiddenCount = state.items.filter(inSelectedGroup).length - vis.length;
+  resCount.textContent = (tk.length
+    ? total.toLocaleString("es-VE") + (total===1?" código":" códigos") + " · " + found.length.toLocaleString("es-VE") + (found.length===1?" artículo":" artículos")
+    : (function(){ var gc=groupByCode(vis).length; return gc.toLocaleString("es-VE") + (gc===1?" código · ":" códigos · ") + vis.length.toLocaleString("es-VE") + (vis.length===1?" artículo con existencia":" artículos con existencia"); })()
+      + (state.selGroups.length ? " en " + state.selGroups.length + (state.selGroups.length===1?" grupo":" grupos") : ""))
+    + (hiddenCount > 0 && !$("chkOut").checked ? " · " + hiddenCount.toLocaleString("es-VE") + " agotados ocultos" : "");
+
+  function metaFor(it){
+    var st = fmtStock(it.stock);
+    var priceHtml = it.prices.map(function(p){
+      return '<span class="metaitem"><span class="k">'+esc(p.label)+'</span><span class="v">'+fmtPrice(p.val)+"</span></span>";
+    }).join("");
+    var stockHtml = hasStock
+      ? '<span class="metaitem"><span class="k">Existencia</span><span class="v '+st.cls+'">'+st.txt+"</span></span>"
+      : "";
+    return priceHtml + stockHtml;
+  }
+
+  var html = slice.map(function(g){
+    var head = '<div class="code">'+ (g.code ? highlight(g.code,tk) : "—") +"</div>"
+             + '<div class="desc">'+ highlight(g.desc,tk) +"</div>";
+
+    if(g.variants.length === 1){
+      var it = g.variants[0];
+      var brandHtml = it.brand
+        ? '<span class="metaitem"><span class="k">Marca</span><span class="v">'+highlight(it.brand,tk)+"</span></span>"
+        : "";
+      return '<div class="card">'+ head + '<div class="meta">'+ brandHtml + metaFor(it) +"</div></div>";
+    }
+
+    var totalStock = hasStock ? sumStock(g.variants) : null;
+    var totalSt = totalStock==null ? null : fmtStock(totalStock);
+    var avgs = avgPrices(g.variants);
+    var avgHtml = avgs.length
+      ? '<div class="avgbox"><span class="avglabel">Promedio del código</span>'
+        + avgs.map(function(a){
+            return '<span class="metaitem"><span class="k">'+esc(a.label)+'</span><span class="v">'+fmtPrice(a.avg)+"</span></span>";
+          }).join("")
+        + "</div>"
+      : "";
+    var summary = '<div class="gsummary">'
+      + g.variants.length + " marcas"
+      + (totalSt ? ' · total <span class="'+totalSt.cls+'">'+totalSt.txt+"</span> en existencia" : "")
+      + "</div>" + avgHtml;
+    var rows = g.variants.map(function(it){
+      var altDesc = (norm(it.desc)!==norm(g.desc) && it.desc) ? '<div class="vdesc">'+highlight(it.desc,tk)+"</div>" : "";
+      return '<div class="variant">'
+        + '<div class="vbrand">'+ (it.brand ? highlight(it.brand,tk) : "Sin marca") + altDesc +"</div>"
+        + '<div class="meta">'+ metaFor(it) +"</div>"
+        + "</div>";
+    }).join("");
+    return '<div class="card multi">'+ head + summary + '<div class="variants">'+ rows +"</div></div>";
+  }).join("");
+
+  if(total > state.shown){
+    html += '<button class="more" id="btnMore">Mostrar más ('+(total-state.shown).toLocaleString("es-VE")+' restantes)</button>';
+  }
+  results.innerHTML = html;
+  var more = $("btnMore");
+  if(more) more.addEventListener("click",function(){ state.shown += PAGE; render(); });
+}
+
+q.addEventListener("input",function(){
+  state.shown = PAGE;
+  searchBox.classList.toggle("hasval", q.value!=="");
+  render();
+});
+$("chkOut").addEventListener("change",function(){ state.shown = PAGE; render(); });
+$("btnClear").addEventListener("click",function(){
+  q.value=""; searchBox.classList.remove("hasval");
+  state.shown = PAGE; render(); q.focus();
+});
+
+function showSearch(){
+  mapping.classList.add("hidden");
+  loader.classList.add("hidden");
+  noData.classList.add("hidden");
+  searchArea.classList.remove("hidden");
+  updateInfo();
+  state.shown = PAGE;
+  render();
+}
+
+function updateInfo(){
+  if(!state.loadedAt){ dataInfo.innerHTML=""; return; }
+  var d = state.loadedAt;
+  var when = d.toLocaleDateString("es-VE",{day:"numeric",month:"short"}) + " " +
+             d.toLocaleTimeString("es-VE",{hour:"2-digit",minute:"2-digit"});
+  dataInfo.innerHTML = "Actualizado " + when
+    + (state.canWrite ? ' · <button id="btnReload">Actualizar archivo</button>' : "");
+  if(!state.artifactApi && typeof window.claude === "undefined") dataInfo.title = "Genera una página nueva con tu Excel actualizado";
+  var b = $("btnReload");
+  if(b) b.addEventListener("click",function(){
+    searchArea.classList.add("hidden");
+    loader.classList.remove("hidden");
+    loadMsg.textContent = "";
+  });
+}
+
+/* ---------- arranque ---------- */
+var hasData = readEmbedded();
+if(hasData){ showSearch(); }
+else { loader.classList.remove("hidden"); }   // sin datos: siempre ofrecer la carga
+
+// Descubrir si esta vista puede publicar (dueño/editor)
+(function initPlatform(){
+  if(typeof window.claude === "undefined" || typeof window.claude.use !== "function"){
+    // Fuera de Claude (archivo alojado en otro sitio): cualquiera puede generar una página nueva
+    state.canWrite = true; state.artifactApi = null;
+    if(hasData) updateInfo();
+    return;
+  }
+  Promise.all([window.claude.use("artifact"), window.claude.use("user")]).then(function(res){
+    var api = res[0], user = res[1];
+    var can = null; // null = no se pudo determinar
+    try{ if(user) can = !!(user.isOwner() || user.canEdit()); }catch(e){ can = null; }
+    state.artifactApi = api;
+    // Si no se pudo determinar, se permite intentar: la publicación dirá si es solo lectura
+    state.canWrite = !!api && can !== false;
+    if(hasData) updateInfo();
+  }).catch(function(){ /* vista de solo lectura */ });
+})();
+})();
+</script>
+</body>
+</html>
