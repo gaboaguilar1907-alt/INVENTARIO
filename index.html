@@ -216,16 +216,22 @@ input[type=file]{display:none}
 .price-ml .k{color:#8a6500}
 .price-shop .v{color:#ffffff;background:#1a7f4b}
 .price-shop .k{color:#1a7f4b}
+.price-mayor .v{font-weight:800;font-size:1.15rem;padding:2px 8px;border-radius:6px;display:inline-block;color:#ffffff;background:#e8701a}
+.price-mayor .k{font-weight:700;color:#c25a0c}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .price-ml .v{color:#1a1400;background:#ffd500}
   :root:not([data-theme="light"]) .price-ml .k{color:#ffd500}
   :root:not([data-theme="light"]) .price-shop .v{color:#ffffff;background:#1f9a5a}
   :root:not([data-theme="light"]) .price-shop .k{color:#4cc783}
+  :root:not([data-theme="light"]) .price-mayor .v{color:#1a0d00;background:#ff8c2e}
+  :root:not([data-theme="light"]) .price-mayor .k{color:#ff9f4d}
 }
 :root[data-theme="dark"] .price-ml .v{color:#1a1400;background:#ffd500}
 :root[data-theme="dark"] .price-ml .k{color:#ffd500}
 :root[data-theme="dark"] .price-shop .v{color:#ffffff;background:#1f9a5a}
 :root[data-theme="dark"] .price-shop .k{color:#4cc783}
+:root[data-theme="dark"] .price-mayor .v{color:#1a0d00;background:#ff8c2e}
+:root[data-theme="dark"] .price-mayor .k{color:#ff9f4d}
 .card.multi{border-left:4px solid var(--accent)}
 .gsummary{font-size:.85rem;color:var(--ink-soft);margin:-4px 0 8px}
 .gsummary span{font-weight:600}
@@ -408,6 +414,7 @@ function fmtPrice(v){
 function priceClass(label){
   var n = norm(label);
   if(n.indexOf("mercado")!==-1 || n.indexOf(" ml")!==-1 || n===("ml")) return "price-ml";
+  if(n.indexOf("mayor")!==-1) return "price-mayor";
   if(n.indexOf("mostrador")!==-1 || n.indexOf("vendedor")!==-1 || n.indexOf("tienda")!==-1 || n.indexOf("detal")!==-1) return "price-shop";
   return "";
 }
